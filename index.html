@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="检验记录管理系统 — 支持物料库管理、检验数据录入、历史查询与汇总报表">
+    <title>检验记录表</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --color-primary: #1a73e8;
+            --color-primary-dark: #1557b0;
+            --color-primary-light: #e8f0fe;
+            --color-success: #34a853;
+            --color-success-dark: #2d8e47;
+            --color-danger: #ea4335;
+            --color-danger-light: #fce8e6;
+            --color-warning: #fbbc04;
+            --color-warning-light: #fff3e0;
+            --color-bg: #f0f2f5;
+            --color-white: #ffffff;
+            --color-gray-50: #f8f9fa;
+            --color-gray-100: #f5f5f5;
+            --color-gray-200: #f1f3f4;
+            --color-gray-300: #dddddd;
+            --color-gray-400: #dadce0;
+            --color-gray-500: #999999;
+            --color-gray-600: #666666;
+            --color-gray-700: #555555;
+            --color-gray-800: #444444;
+            --color-gray-900: #333333;
+            --color-amber-500: #ff9800;
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 10px;
+            --radius-xl: 12px;
+            --radius-pill: 24px;
+            --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+            --shadow-md: 0 2px 6px rgba(26,115,232,0.3);
+            --shadow-danger: 0 2px 6px rgba(234,67,53,0.3);
+            --shadow-success: 0 2px 6px rgba(52,168,83,0.3);
+            --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.15);
+            --spacing-xs: 4px;
+            --spacing-sm: 6px;
+            --spacing-md: 8px;
+            --spacing-lg: 10px;
+            --spacing-xl: 12px;
+            --spacing-2xl: 14px;
+            --spacing-3xl: 16px;
+            --font-size-xs: 11px;
+            --font-size-sm: 12px;
+            --font-size-md: 13px;
+            --font-size-lg: 14px;
+            --font-size-xl: 15px;
+            --font-size-2xl: 16px;
+            --font-size-3xl: 18px;
+            --font-size-4xl: 20px;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --transition-fast: all 0.2s;
+            --transition-smooth: all 0.3s;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--color-bg);
+            padding: var(--spacing-xl);
+            min-height: 100vh;
+        }
+
+        /* ---------- 页头 ---------- */
+        .header {
+            background: var(--color-primary);
+            color: var(--color-white);
+            padding: var(--spacing-3xl);
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+            box-shadow: var(--shadow-md);
+        }
+        .header h1 { font-size: var(--font-size-4xl); margin-bottom: var(--spacing-xs); }
+        .header .date { font-size: var(--font-size-lg); opacity: 0.9; }
+
+        /* ---------- 卡片 ---------- */
+        .card {
+            background: var(--color-white);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-3xl);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: var(--shadow-sm);
+        }
+        .card-title {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-gray-900);
+            margin-bottom: var(--spacing-xl);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 2px solid var(--color-primary);
+        }
+        .card-title--inline {
+            margin: 0;
+            border: 0;
+            padding: 0;
+        }
+
+        /* ---------- 表单 ---------- */
+        .form-group {
+            margin-bottom: var(--spacing-2xl);
+            position: relative;
+        }
+        label {
+            display: block;
+            font-size: var(--font-size-lg);
+            color: var(--color-gray-700);
+            margin-bottom: var(--spacing-sm);
+            font-weight: var(--font-weight-medium);
+        }
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: var(--spacing-xl) var(--spacing-2xl);
+            border: 1.5px solid var(--color-gray-300);
+            border-radius: var(--radius-lg);
+            font-size: var(--font-size-2xl);
+            transition: var(--transition-fast);
+            -webkit-appearance: none;
+            background: var(--color-white);
+        }
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(26,115,232,0.1);
+        }
+        input[readonly] {
+            background: var(--color-gray-100);
+            color: var(--color-gray-600);
+        }
+        .readonly-box {
+            background: var(--color-primary-light);
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        /* ---------- 按钮 ---------- */
+        .btn {
+            width: 100%;
+            padding: var(--spacing-2xl);
+            border: none;
+            border-radius: var(--radius-lg);
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            transition: var(--transition-fast);
+            margin-bottom: var(--spacing-lg);
+            user-select: none;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+        .btn-primary { background: var(--color-primary); color: var(--color-white); box-shadow: var(--shadow-md); }
+        .btn-primary:active { background: var(--color-primary-dark); }
+
+        .btn-success { background: var(--color-success); color: var(--color-white); box-shadow: var(--shadow-success); }
+        .btn-success:active { background: var(--color-success-dark); }
+
+        .btn-danger { background: var(--color-danger); color: var(--color-white); box-shadow: var(--shadow-danger); }
+
+        .btn-secondary { background: var(--color-gray-200); color: var(--color-gray-900); border: 1.5px solid var(--color-gray-300); }
+
+        .btn-warning { background: var(--color-warning); color: var(--color-gray-900); }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: var(--font-size-sm);
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+        .btn-edit { background: var(--color-warning); color: var(--color-gray-900); }
+        .btn-delete { background: var(--color-danger); color: var(--color-white); }
+
+        /* ---------- 统计卡片 ---------- */
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+        .stat-box {
+            background: var(--color-primary-light);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-lg);
+            text-align: center;
+        }
+        .stat-box--danger { background: var(--color-danger-light); }
+        .stat-value { font-size: var(--font-size-4xl); font-weight: var(--font-weight-bold); color: var(--color-primary); }
+        .stat-box--danger .stat-value { color: var(--color-danger); }
+        .stat-label { font-size: var(--font-size-xs); color: var(--color-gray-600); margin-top: 2px; }
+
+        /* ---------- 记录列表 ---------- */
+        .record-list { margin-top: var(--spacing-md); }
+        .record-item {
+            background: var(--color-gray-50);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-md);
+            border-left: 4px solid var(--color-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .record-item--defect { border-left-color: var(--color-danger); background: var(--color-danger-light); }
+        .record-info { font-size: var(--font-size-md); color: var(--color-gray-800); line-height: 1.6; flex: 1; }
+        .record-info strong { color: var(--color-primary); }
+        .defect-tag {
+            display: inline-block;
+            background: var(--color-danger);
+            color: var(--color-white);
+            font-size: var(--font-size-xs);
+            padding: 2px 8px;
+            border-radius: var(--spacing-xs);
+            margin-top: var(--spacing-xs);
+        }
+        .record-actions { display: flex; gap: var(--spacing-sm); }
+
+        /* ---------- 空状态 ---------- */
+        .empty-state { text-align: center; color: var(--color-gray-500); padding: 30px; font-size: var(--font-size-lg); }
+
+        /* ---------- Toast ---------- */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--color-gray-900);
+            color: var(--color-white);
+            padding: var(--spacing-xl) 24px;
+            border-radius: var(--radius-pill);
+            font-size: var(--font-size-lg);
+            opacity: 0;
+            transition: var(--transition-smooth);
+            z-index: 1000;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .toast--visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* ---------- 底部操作栏 ---------- */
+        .footer-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-md);
+        }
+        .summary-row {
+            background: var(--color-warning-light);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-2xl);
+            margin-top: var(--spacing-xl);
+            border-left: 4px solid var(--color-amber-500);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .summary-row .label { font-size: var(--font-size-lg); color: var(--color-gray-600); }
+        .summary-row .value { font-size: var(--font-size-4xl); font-weight: var(--font-weight-bold); color: var(--color-amber-500); }
+
+        /* ---------- 下拉搜索 ---------- */
+        .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--color-white);
+            border: 1.5px solid var(--color-primary);
+            border-radius: var(--radius-lg);
+            margin-top: var(--spacing-xs);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: var(--shadow-dropdown);
+            display: none;
+        }
+        .dropdown--open { display: block; }
+        .dropdown-item {
+            padding: var(--spacing-xl) var(--spacing-2xl);
+            font-size: var(--font-size-lg);
+            color: var(--color-gray-900);
+            border-bottom: 1px solid var(--color-bg);
+            cursor: pointer;
+        }
+        .dropdown-item:last-child { border-bottom: none; }
+        .dropdown-item:active { background: var(--color-primary-light); }
+        .dropdown-item .highlight { color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+        .dropdown-empty { padding: var(--spacing-xl) var(--spacing-2xl); font-size: var(--font-size-md); color: var(--color-gray-500); text-align: center; }
+
+        /* ---------- 物料列表项 ---------- */
+        .material-item {
+            background: var(--color-gray-50);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .material-info { font-size: var(--font-size-lg); color: var(--color-gray-800); }
+        .material-info strong { color: var(--color-primary); }
+
+        /* ---------- 折叠面板 ---------- */
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: var(--color-primary);
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            padding: var(--spacing-xs) 0;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        .toggle-btn .arrow { transition: transform 0.2s; display: inline-block; }
+        .toggle-btn--open .arrow { transform: rotate(180deg); }
+        .collapsible { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .collapsible--open { max-height: 3000px; }
+
+        /* ---------- 文件上传 ---------- */
+        .file-input-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; }
+        .file-input-wrapper input[type=file] { position: absolute; left: -9999px; }
+        .file-label {
+            display: block;
+            width: 100%;
+            padding: var(--spacing-2xl);
+            background: var(--color-gray-200);
+            border: 2px dashed #cccccc;
+            border-radius: var(--radius-lg);
+            text-align: center;
+            font-size: var(--font-size-lg);
+            color: var(--color-gray-600);
+            cursor: pointer;
+            margin-bottom: var(--spacing-lg);
+        }
+        .file-label:active { background: var(--color-primary-light); border-color: var(--color-primary); }
+
+        /* ---------- 提示信息 ---------- */
+        .merge-info {
+            background: #fff8e1;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg) var(--spacing-xl);
+            margin-bottom: var(--spacing-lg);
+            font-size: var(--font-size-md);
+            color: var(--color-gray-600);
+            border-left: 3px solid var(--color-warning);
+        }
+
+        /* ---------- 搜索框 ---------- */
+        .search-box { display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-xl); }
+        .search-box input,
+        .search-box select {
+            flex: 1;
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border: 1.5px solid var(--color-gray-300);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-lg);
+        }
+        .search-box input:focus,
+        .search-box select:focus {
+            outline: none;
+            border-color: var(--color-primary);
+        }
+        .search-box .btn { width: auto; padding: var(--spacing-lg) var(--spacing-3xl); margin: 0; font-size: var(--font-size-lg); }
+
+        .search-result {
+            background: var(--color-primary-light);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg) var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            font-size: var(--font-size-md);
+            color: var(--color-primary);
+            display: none;
+        }
+        .search-result--visible { display: block; }
+
+        .search-result-item {
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border-bottom: 1px solid #c8d9f0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:active { background: #d2e3fc; }
+        .search-result-item .info { flex: 1; }
+
+        /* ---------- 分页 ---------- */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+            padding: var(--spacing-md);
+        }
+        .page-btn {
+            padding: var(--spacing-md) var(--spacing-2xl);
+            border: 1.5px solid var(--color-gray-300);
+            background: var(--color-white);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-lg);
+            cursor: pointer;
+            color: var(--color-gray-900);
+        }
+        .page-btn:active { background: var(--color-primary-light); border-color: var(--color-primary); }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .page-info { font-size: var(--font-size-md); color: var(--color-gray-600); white-space: nowrap; }
+
+        /* ---------- 筛选栏 ---------- */
+        .filter-bar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-bottom: var(--spacing-xl); }
+        .filter-bar input,
+        .filter-bar select {
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border: 1.5px solid var(--color-gray-300);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-lg);
+        }
+        .history-query-btn { grid-column: 1 / -1; }
+
+        .date-shortcuts { display: flex; gap: var(--spacing-sm); margin: var(--spacing-md) 0 var(--spacing-lg); }
+        .shortcut-btn {
+            flex: 1;
+            padding: var(--spacing-md) var(--spacing-xs);
+            border: 1px solid var(--color-gray-400);
+            border-radius: var(--radius-md);
+            background: var(--color-white);
+            color: var(--color-gray-700);
+            font-size: var(--font-size-md);
+            cursor: pointer;
+        }
+        .shortcut-btn--active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+
+        /* ---------- 汇总报表 ---------- */
+        .summary-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-md); margin-bottom: var(--spacing-2xl); }
+        .summary-stat {
+            background: var(--color-primary-light);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl) var(--spacing-sm);
+            text-align: center;
+        }
+        .summary-stat span { display: block; color: var(--color-primary); font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold); }
+        .summary-stat small { color: var(--color-gray-600); font-size: var(--font-size-xs); }
+
+        .summary-tabs { display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-xl); }
+        .summary-tab {
+            flex: 1;
+            padding: 9px 6px;
+            border: 1px solid var(--color-gray-400);
+            border-radius: var(--radius-md);
+            background: var(--color-white);
+            color: var(--color-gray-700);
+            font-size: var(--font-size-md);
+            cursor: pointer;
+        }
+        .summary-tab--active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+
+        .summary-table-wrap { overflow-x: auto; margin-bottom: var(--spacing-xl); }
+        .summary-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: var(--font-size-md); }
+        .summary-table th,
+        .summary-table td { padding: 9px var(--spacing-lg); border-bottom: 1px solid #eeeeee; text-align: right; white-space: nowrap; }
+        .summary-table th { background: var(--color-gray-50); color: var(--color-gray-700); font-weight: var(--font-weight-semibold); }
+        .summary-table th:nth-child(2),
+        .summary-table td:nth-child(2) { text-align: left; }
+        .summary-table tbody tr:last-child td { border-bottom: none; }
+
+        /* ---------- 不合格原因 ---------- */
+        .defect-reason-group { display: none; animation: slideDown 0.2s ease; }
+        .defect-reason-group--visible { display: block; }
+        .custom-reason-input { display: none; margin-top: var(--spacing-md); }
+        .custom-reason-input--visible { display: block; }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 420px) {
+            .summary-stats { gap: var(--spacing-sm); }
+            .summary-stat { padding: var(--spacing-lg) 3px; }
+            .summary-stat span { font-size: var(--font-size-2xl); }
+            .summary-stat small { font-size: var(--spacing-lg); }
+            .summary-tab { font-size: var(--font-size-sm); padding: var(--spacing-md) 3px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== 页头 ==================== -->
+    <div class="header">
+        <h1>📋 检验记录表</h1>
+        <div class="date" id="currentDate"></div>
+    </div>
+
+    <!-- ==================== 物料库管理 ==================== -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">📦 物料库管理</div>
+            <button class="toggle-btn" id="materialToggle" onclick="toggleMaterialPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="materialPanel">
+            <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">🔍 查找物料（点击结果直接编辑）</div>
+            <div class="search-box">
+                <input type="text" id="searchMaterialCode" placeholder="输入物料编码查找" autocomplete="off">
+                <button class="btn btn-primary" style="padding:10px 16px;font-size:14px;" onclick="searchMaterial()">查找</button>
+            </div>
+            <div class="search-result" id="searchResult"></div>
+
+            <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;margin-top:16px;">✏️ 添加/编辑物料</div>
+            <div class="form-group"><label>物料编码</label><input type="text" id="dbMaterialCode" placeholder="请输入物料编码"></div>
+            <div class="form-group"><label>图号</label><input type="text" id="dbDrawingNo" placeholder="请输入图号"></div>
+            <div class="form-group"><label>客户</label><input type="text" id="dbCustomer" placeholder="请输入客户名称"></div>
+            <button class="btn btn-primary" id="addMaterialBtn" style="padding:12px;font-size:15px;">💾 保存物料</button>
+            <button class="btn btn-secondary" id="cancelMaterialEditBtn" style="display:none;padding:12px;font-size:15px;" onclick="cancelMaterialEdit()">❌ 取消编辑</button>
+
+            <div class="merge-info" style="margin-top:12px;">💡 导入时自动合并：物料编码+图号相同的会更新客户，不重复添加</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <button class="btn btn-success" id="exportMaterialBtn" style="padding:12px;font-size:14px;">📥 导出物料库</button>
+                <div class="file-input-wrapper">
+                    <input type="file" id="importMaterialFile" accept=".xlsx,.xls,.csv" onchange="importMaterials(this)">
+                    <label for="importMaterialFile" class="file-label">📤 导入物料库</label>
+                </div>
+            </div>
+
+            <div style="margin-top:12px;">
+                <div style="font-size:13px;color:#666;margin-bottom:8px;">已存物料（<span id="materialCount">0</span>条）</div>
+                <div id="materialList"><div class="empty-state" style="padding:16px;font-size:13px;">暂无物料，请添加</div></div>
+                <div class="pagination" id="materialPagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 数据备份恢复 ==================== -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">💾 数据备份/恢复</div>
+            <button class="toggle-btn" id="backupToggle" onclick="toggleBackupPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="backupPanel">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <button class="btn btn-success" id="exportAllBtn" style="padding:12px;font-size:14px;">📥 导出全部数据</button>
+                <div class="file-input-wrapper">
+                    <input type="file" id="importAllFile" accept=".json" onchange="importAllData(this)">
+                    <label for="importAllFile" class="file-label">📤 恢复全部数据</label>
+                </div>
+            </div>
+            <div class="merge-info">💡 导出全部数据会生成一个 .json 文件，包含检验记录和物料库，换手机时用这个恢复</div>
+        </div>
+    </div>
+
+    <!-- ==================== 今日统计 ==================== -->
+    <div class="card">
+        <div class="card-title">📊 今日统计</div>
+        <div class="stats">
+            <div class="stat-box"><div class="stat-value" id="totalCount">0</div><div class="stat-label">总记录数</div></div>
+            <div class="stat-box"><div class="stat-value" id="totalQty">0</div><div class="stat-label">总数量</div></div>
+            <div class="stat-box stat-box--danger"><div class="stat-value" id="totalDefect">0</div><div class="stat-label">不合格数</div></div>
+        </div>
+    </div>
+
+    <!-- ==================== 录入检验数据 ==================== -->
+    <div class="card">
+        <div class="card-title">📝 录入检验数据</div>
+        <div class="form-group">
+            <label>客户 <span style="color:var(--color-danger)">*</span></label>
+            <input type="text" id="customer" placeholder="请输入客户名称" inputmode="text" autocomplete="off">
+            <div class="dropdown" id="customerDropdown"></div>
+        </div>
+        <div class="form-group">
+            <label>生产订单 <span style="color:var(--color-danger)">*</span></label>
+            <input type="text" id="orderNo" placeholder="请输入生产订单号" inputmode="text">
+        </div>
+        <div class="form-group">
+            <label>物料编码 <span style="color:var(--color-danger)">*</span></label>
+            <input type="text" id="materialCode" placeholder="输入物料编码自动匹配图号，或输入关键词搜索" inputmode="text" autocomplete="off">
+            <div class="dropdown" id="materialCodeDropdown"></div>
+        </div>
+        <div class="form-group">
+            <label>图号 <span style="color:var(--color-danger)">*</span></label>
+            <input type="text" id="drawingNo" placeholder="输入图号自动匹配物料编码，或输入关键词搜索" inputmode="text" autocomplete="off">
+            <div class="dropdown" id="drawingNoDropdown"></div>
+        </div>
+        <div class="form-group">
+            <label>数量 <span style="color:var(--color-danger)">*</span></label>
+            <input type="number" id="quantity" placeholder="请输入数量" inputmode="numeric" min="0">
+        </div>
+        <div class="form-group">
+            <label>不合格数量 <span style="color:var(--color-danger)">*</span></label>
+            <input type="number" id="defective" value="0" placeholder="请输入不合格数量" inputmode="numeric" min="0">
+        </div>
+        <div class="form-group defect-reason-group" id="defectReasonGroup">
+            <label>不合格原因 <span style="color:var(--color-danger)">*</span></label>
+            <select id="defectReason">
+                <option value="">请选择原因</option>
+                <option value="尺寸超差">尺寸超差</option>
+                <option value="外观不良">外观不良</option>
+                <option value="材质问题">材质问题</option>
+                <option value="性能不合格">性能不合格</option>
+                <option value="装配不良">装配不良</option>
+                <option value="__custom__">其他（自行填写）</option>
+            </select>
+            <input type="text" id="customDefectReason" class="custom-reason-input" placeholder="请输入不合格原因" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label>合格数量（自动计算）</label>
+            <input type="number" id="qualified" readonly placeholder="自动计算" class="readonly-box">
+        </div>
+        <button class="btn btn-primary" id="addBtn">➕ 添加记录</button>
+        <button class="btn btn-success" id="updateBtn" style="display:none;">💾 保存修改</button>
+        <button class="btn btn-danger" id="cancelBtn" style="display:none;">❌ 取消</button>
+    </div>
+
+    <!-- ==================== 历史记录查询 ==================== -->
+    <div class="card">
+        <div class="card-title">📜 历史记录查询</div>
+        <div class="filter-bar">
+            <input type="date" id="filterStartDate" aria-label="开始日期">
+            <input type="date" id="filterEndDate" aria-label="结束日期">
+        </div>
+        <div class="date-shortcuts">
+            <button type="button" class="shortcut-btn shortcut-btn--active" data-range="today">今天</button>
+            <button type="button" class="shortcut-btn" data-range="week">本周</button>
+            <button type="button" class="shortcut-btn" data-range="month">本月</button>
+            <button type="button" class="shortcut-btn" data-range="all">全部</button>
+        </div>
+        <div class="filter-bar">
+            <select id="filterCustomer"><option value="">全部客户</option></select>
+            <input type="text" id="filterMaterial" placeholder="物料编码">
+            <button class="btn btn-primary history-query-btn" style="padding:10px;font-size:14px;" onclick="applyFilter()">🔍 查询</button>
+        </div>
+        <div class="record-list" id="historyList"><div class="empty-state">请选择条件查询历史记录</div></div>
+        <div class="pagination" id="historyPagination"></div>
+    </div>
+
+    <!-- ==================== 汇总报表 ==================== -->
+    <div class="card" id="summaryReportCard">
+        <div class="card-title">📊 汇总报表</div>
+        <div class="summary-stats">
+            <div class="summary-stat"><span id="summaryRecordCount">0</span><small>记录数</small></div>
+            <div class="summary-stat"><span id="summaryQuantity">0</span><small>检验总数</small></div>
+            <div class="summary-stat"><span id="summaryDefective">0</span><small>不合格数</small></div>
+            <div class="summary-stat"><span id="summaryRate">0.00%</span><small>不合格率</small></div>
+        </div>
+        <div class="summary-tabs">
+            <button type="button" class="summary-tab summary-tab--active" data-dimension="customer">按客户</button>
+            <button type="button" class="summary-tab" data-dimension="material">按物料/图号</button>
+            <button type="button" class="summary-tab" data-dimension="reason">按原因</button>
+        </div>
+        <div id="summaryTable"></div>
+        <button class="btn btn-success" id="exportSummaryBtn">📥 导出汇总报表</button>
+    </div>
+
+    <!-- ==================== 今日记录列表 ==================== -->
+    <div class="card">
+        <div class="card-title">📑 今日记录列表</div>
+        <div class="record-list" id="recordList"><div class="empty-state">暂无记录，请添加</div></div>
+        <div class="summary-row" id="summaryRow" style="display:none;">
+            <span class="label">📦 数量合计</span>
+            <span class="value" id="sumQty">0</span>
+        </div>
+        <div class="pagination" id="recordPagination"></div>
+    </div>
+
+    <!-- ==================== 导出数据 ==================== -->
+    <div class="card" style="margin-bottom: 40px;">
+        <div class="card-title">💾 导出数据</div>
+        <div class="footer-actions">
+            <button class="btn btn-success" id="exportBtn">📥 导出Excel</button>
+            <button class="btn btn-danger" id="clearBtn">🗑️ 清空全部</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // =============================================================================
+    // 检验记录表 — 核心逻辑
+    // 使用 localStorage 存储检验记录和物料库数据
+    // =============================================================================
+
+    /* ==================== 常量 & 配置 ==================== */
+    const CONFIG = Object.freeze({
+        INSPECTOR_NAME: '刘彪',
+        MATERIAL_PAGE_SIZE: 10,
+        RECORD_PAGE_SIZE: 10,
+        HISTORY_PAGE_SIZE: 10,
+        STORAGE_KEYS: {
+            RECORDS: 'recordsByDate',
+            MATERIALS: 'materialDB',
+            LEGACY: 'inspectionRecords'
+        },
+        EXPORT_VERSION: '1.0',
+        DEFECT_REASONS: Object.freeze([
+            '尺寸超差', '外观不良', '材质问题', '性能不合格', '装配不良'
+        ]),
+        TOAST_DURATION_MS: 2000
+    });
+
+    /* ==================== 日期工具 ==================== */
+    const TODAY = new Date();
+
+    /** 将 Date 格式化为 "YYYY-MM-DD" 字符串 */
+    function formatDateStr(date) {
+        return date.getFullYear() + '-' +
+            String(date.getMonth() + 1).padStart(2, '0') +
+            String(date.getDate()).padStart(2, '0');
+    }
+
+    const CURRENT_DATE_STR = formatDateStr(TODAY);
+    document.getElementById('currentDate').textContent =
+        CURRENT_DATE_STR + ' 检验员：' + CONFIG.INSPECTOR_NAME;
+
+    /* ==================== 安全 localStorage 操作 ==================== */
+    function safeLoadJSON(key, fallback) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (e) {
+            console.warn('localStorage 读取失败:', key, e);
+            return fallback;
+        }
+    }
+
+    function safeSaveJSON(key, value) {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+            return true;
+        } catch (e) {
+            console.error('localStorage 写入失败:', key, e);
+            showToast('⚠️ 存储空间不足，请清理旧数据');
+            return false;
+        }
+    }
+
+    /* ==================== 数据初始化 & 迁移 ==================== */
+    let recordsByDate = safeLoadJSON(CONFIG.STORAGE_KEYS.RECORDS, {});
+    let materials = safeLoadJSON(CONFIG.STORAGE_KEYS.MATERIALS, []);
+
+    // 兼容旧版本数据结构（单数组 → 按日期分组）
+    (function migrateLegacyData() {
+        const legacy = safeLoadJSON(CONFIG.STORAGE_KEYS.LEGACY, []);
+        if (legacy.length > 0 && !Object.hasOwn(recordsByDate, CURRENT_DATE_STR)) {
+            recordsByDate[CURRENT_DATE_STR] = legacy.map(function (r) {
+                return {
+                    customer: r.customer || '',
+                    orderNo: r.orderNo || '',
+                    drawingNo: r.drawingNo || '',
+                    materialCode: r.materialCode || '',
+                    quantity: r.quantity || 0,
+                    defective: r.defective || 0,
+                    qualified: r.qualified || 0,
+                    defectReason: r.defectReason || ''
+                };
+            });
+            safeSaveJSON(CONFIG.STORAGE_KEYS.RECORDS, recordsByDate);
+            localStorage.removeItem(CONFIG.STORAGE_KEYS.LEGACY);
+        }
+    })();
+
+    /** 安全保存检验记录 */
+    function saveRecords() {
+        safeSaveJSON(CONFIG.STORAGE_KEYS.RECORDS, recordsByDate);
+    }
+
+    /** 安全保存物料库 */
+    function saveMaterials() {
+        safeSaveJSON(CONFIG.STORAGE_KEYS.MATERIALS, materials);
+    }
+
+    /* ==================== HTML 转义 ==================== */
+    const HTML_ENTITIES = Object.freeze({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    });
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function (ch) {
+            return HTML_ENTITIES[ch];
+        });
+    }
+
+    /* ==================== 数值安全转换 ==================== */
+    function toNumber(value) {
+        var num = Number(value);
+        return Number.isFinite(num) && num >= 0 ? num : 0;
+    }
+
+    /* ==================== Toast 提示 ==================== */
+    var toastTimer = null;
+
+    function showToast(msg) {
+        var el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('toast--visible');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+            el.classList.remove('toast--visible');
+        }, CONFIG.TOAST_DURATION_MS);
+    }
+
+    /* ==================== 折叠面板 ==================== */
+    function setupToggle(panelId, btnId) {
+        var panel = document.getElementById(panelId);
+        var btn = document.getElementById(btnId);
+        var shouldOpen = panel.classList.contains('collapsible--open');
+        panel.classList.toggle('collapsible--open');
+        btn.classList.toggle('toggle-btn--open');
+        btn.innerHTML = panel.classList.contains('collapsible--open')
+            ? '收起 <span class="arrow">▼</span>'
+            : '展开 <span class="arrow">▼</span>';
+    }
+
+    window.toggleMaterialPanel = function () {
+        setupToggle('materialPanel', 'materialToggle');
+    };
+
+    window.toggleBackupPanel = function () {
+        setupToggle('backupPanel', 'backupToggle');
+    };
+
+    /* =============================================================================
+     * 物料库管理
+     * ============================================================================= */
+
+    var materialPage = 1;
+    var editingMaterialIndex = -1;
+
+    /** 渲染物料列表（分页） */
+    function renderMaterials() {
+        var list = document.getElementById('materialList');
+        document.getElementById('materialCount').textContent = materials.length;
+
+        if (materials.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:16px;font-size:13px;">暂无物料，请添加</div>';
+            renderMaterialPagination(0);
+            return;
+        }
+
+        var totalPages = Math.ceil(materials.length / CONFIG.MATERIAL_PAGE_SIZE);
+        if (materialPage > totalPages) materialPage = totalPages;
+        if (materialPage < 1) materialPage = 1;
+
+        var start = (materialPage - 1) * CONFIG.MATERIAL_PAGE_SIZE;
+        var end = start + CONFIG.MATERIAL_PAGE_SIZE;
+        var pageItems = materials.slice(start, end);
+
+        list.innerHTML = pageItems.map(function (m, i) {
+            var realIndex = start + i;
+            return (
+                '<div class="material-item">' +
+                '<div class="material-info"><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
+                escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</div>' +
+                '<div class="record-actions">' +
+                '<button class="btn-small btn-edit" onclick="editMaterial(' + realIndex + ')">编辑</button>' +
+                '<button class="btn-small btn-delete" onclick="deleteMaterial(' + realIndex + ')">删除</button>' +
+                '</div></div>'
+            );
+        }).join('');
+
+        renderMaterialPagination(totalPages);
+    }
+
+    function renderMaterialPagination(totalPages) {
+        var div = document.getElementById('materialPagination');
+        if (totalPages <= 1) { div.innerHTML = ''; return; }
+        div.innerHTML =
+            '<button class="page-btn" onclick="changeMaterialPage(' + (materialPage - 1) + ')"' +
+            (materialPage <= 1 ? ' disabled' : '') + '>上一页</button>' +
+            '<span class="page-info">' + materialPage + ' / ' + totalPages + '</span>' +
+            '<button class="page-btn" onclick="changeMaterialPage(' + (materialPage + 1) + ')"' +
+            (materialPage >= totalPages ? ' disabled' : '') + '>下一页</button>';
+    }
+
+    window.changeMaterialPage = function (p) {
+        materialPage = p;
+        renderMaterials();
+    };
+
+    /** 查找物料（模糊搜索） */
+    window.searchMaterial = function () {
+        var code = document.getElementById('searchMaterialCode').value.trim();
+        var resultDiv = document.getElementById('searchResult');
+        if (!code) {
+            resultDiv.innerHTML = '请输入物料编码';
+            resultDiv.classList.add('search-result--visible');
+            return;
+        }
+        var q = code.toLowerCase();
+        var found = materials.filter(function (m) {
+            return m.materialCode.toLowerCase().includes(q);
+        });
+        if (found.length === 0) {
+            resultDiv.innerHTML = '未找到物料编码包含 "' + escapeHtml(code) + '" 的记录';
+            resultDiv.classList.add('search-result--visible');
+            return;
+        }
+        resultDiv.innerHTML = found.map(function (m) {
+            var realIndex = materials.indexOf(m);
+            return (
+                '<div class="search-result-item" onclick="editMaterial(' + realIndex +
+                ');document.getElementById(\'searchResult\').classList.remove(\'search-result--visible\');">' +
+                '<div class="info"><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
+                escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</div>' +
+                '<span class="edit-tag" style="background:var(--color-primary);color:white;font-size:11px;' +
+                'padding:3px 8px;border-radius:4px;white-space:nowrap;">点击编辑</span></div>'
+            );
+        }).join('');
+        resultDiv.classList.add('search-result--visible');
+    };
+
+    /** 编辑物料（回填表单） */
+    window.editMaterial = function (index) {
+        var m = materials[index];
+        document.getElementById('dbMaterialCode').value = m.materialCode;
+        document.getElementById('dbDrawingNo').value = m.drawingNo;
+        document.getElementById('dbCustomer').value = m.customer || '';
+        editingMaterialIndex = index;
+        document.getElementById('addMaterialBtn').textContent = '💾 更新物料';
+        document.getElementById('cancelMaterialEditBtn').style.display = 'block';
+        showToast('✏️ 正在编辑：' + m.materialCode);
+    };
+
+    window.cancelMaterialEdit = function () {
+        document.getElementById('dbMaterialCode').value = '';
+        document.getElementById('dbDrawingNo').value = '';
+        document.getElementById('dbCustomer').value = '';
+        editingMaterialIndex = -1;
+        document.getElementById('addMaterialBtn').textContent = '💾 保存物料';
+        document.getElementById('cancelMaterialEditBtn').style.display = 'none';
+    };
+
+    /** 添加/更新物料 */
+    document.getElementById('addMaterialBtn').addEventListener('click', function () {
+        var code = document.getElementById('dbMaterialCode').value.trim();
+        var drawing = document.getElementById('dbDrawingNo').value.trim();
+        var customer = document.getElementById('dbCustomer').value.trim();
+
+        if (!code) { showToast('请输入物料编码'); return; }
+        if (!drawing) { showToast('请输入图号'); return; }
+
+        // 编辑已有物料
+        if (editingMaterialIndex >= 0) {
+            materials[editingMaterialIndex] = { materialCode: code, drawingNo: drawing, customer: customer };
+            saveMaterials();
+            renderMaterials();
+            window.cancelMaterialEdit();
+            showToast('✅ 物料已更新');
+            return;
+        }
+
+        // 查找是否已存在相同编码+图号的物料
+        var existingIndex = materials.findIndex(function (m) {
+            return m.materialCode === code && m.drawingNo === drawing;
+        });
+        if (existingIndex >= 0) {
+            materials[existingIndex].customer = customer;
+            saveMaterials();
+            renderMaterials();
+            document.getElementById('dbMaterialCode').value = '';
+            document.getElementById('dbDrawingNo').value = '';
+            document.getElementById('dbCustomer').value = '';
+            showToast('✅ 已更新该物料');
+            return;
+        }
+
+        materials.push({ materialCode: code, drawingNo: drawing, customer: customer });
+        saveMaterials();
+        renderMaterials();
+        document.getElementById('dbMaterialCode').value = '';
+        document.getElementById('dbDrawingNo').value = '';
+        document.getElementById('dbCustomer').value = '';
+        showToast('✅ 物料已添加');
+    });
+
+    /** 导出物料库为 Excel */
+    document.getElementById('exportMaterialBtn').addEventListener('click', function () {
+        if (materials.length === 0) { showToast('物料库为空'); return; }
+        var data = [['物料编码', '图号', '客户']];
+        materials.forEach(function (m) {
+            data.push([m.materialCode, m.drawingNo, m.customer || '']);
+        });
+        var ws = XLSX.utils.aoa_to_sheet(data);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '物料库');
+        ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }];
+        XLSX.writeFile(wb, '物料库备份_' + CURRENT_DATE_STR + '.xlsx');
+        showToast('📥 物料库已导出');
+    });
+
+    /** 导入物料库 Excel */
+    window.importMaterials = function (input) {
+        var file = input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                var data = new Uint8Array(e.target.result);
+                var workbook = XLSX.read(data, { type: 'array' });
+                var sheet = workbook.Sheets[workbook.SheetNames[0]];
+                var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                if (rows.length < 2) { showToast('文件内容为空'); return; }
+
+                var result = { imported: 0, merged: 0, skipped: 0 };
+                for (var i = 1; i < rows.length; i++) {
+                    var row = rows[i];
+                    var code = '', drawing = '', customer = '';
+
+                    if (row.length >= 3) {
+                        var first = (row[0] || '').toString().trim();
+                        var second = (row[1] || '').toString().trim();
+                        // 智能识别第一列是客户还是物料编码
+                        if (/[a-zA-Z0-9]/.test(second) && second.length > 2) {
+                            customer = first;
+                            code = second;
+                            drawing = (row[2] || '').toString().trim();
+                        } else {
+                            code = first;
+                            drawing = second;
+                            customer = (row[2] || '').toString().trim();
+                        }
+                    } else {
+                        code = (row[0] || '').toString().trim();
+                        drawing = (row[1] || '').toString().trim();
+                        customer = (row[2] || '').toString().trim();
+                    }
+
+                    if (!code || !drawing) { result.skipped++; continue; }
+
+                    var existingIndex = materials.findIndex(function (m) {
+                        return m.materialCode === code && m.drawingNo === drawing;
+                    });
+                    if (existingIndex >= 0) {
+                        materials[existingIndex].customer = customer;
+                        result.merged++;
+                    } else {
+                        materials.push({ materialCode: code, drawingNo: drawing, customer: customer });
+                        result.imported++;
+                    }
+                }
+
+                saveMaterials();
+                renderMaterials();
+                showToast('✅ 新增 ' + result.imported + ' 条，合并 ' + result.merged +
+                    ' 条，跳过 ' + result.skipped + ' 条');
+            } catch (err) {
+                showToast('❌ 导入失败：文件格式不对');
+            }
+            input.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    window.deleteMaterial = function (index) {
+        if (!confirm('确定删除这条物料吗？')) return;
+        materials.splice(index, 1);
+        saveMaterials();
+        renderMaterials();
+        showToast('🗑️ 已删除');
+    };
+
+    /* =============================================================================
+     * 全部数据备份/恢复
+     * ============================================================================= */
+
+    document.getElementById('exportAllBtn').addEventListener('click', function () {
+        var allData = {
+            recordsByDate: recordsByDate,
+            materialDB: materials,
+            exportDate: CURRENT_DATE_STR,
+            version: CONFIG.EXPORT_VERSION
+        };
+        var blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '检验系统备份_' + CURRENT_DATE_STR + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('📥 全部数据已导出');
+    });
+
+    window.importAllData = function (input) {
+        var file = input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                var data = JSON.parse(e.target.result);
+                if (!data.recordsByDate || !data.materialDB) {
+                    showToast('❌ 备份文件格式不对');
+                    return;
+                }
+                if (!confirm('恢复数据会覆盖现有数据，确定继续吗？')) return;
+                recordsByDate = data.recordsByDate;
+                materials = data.materialDB;
+                saveRecords();
+                saveMaterials();
+                renderMaterials();
+                renderTodayRecords();
+                updateFilterCustomers();
+                showToast('✅ 数据恢复成功');
+            } catch (err) {
+                showToast('❌ 恢复失败：文件损坏');
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    };
+
+    /* =============================================================================
+     * 模糊搜索下拉
+     * ============================================================================= */
+
+    /** 获取物料库中所有不重复的客户名称 */
+    function getUniqueCustomers() {
+        var seen = new Set();
+        materials.forEach(function (m) {
+            if (m.customer) seen.add(m.customer);
+        });
+        return Array.from(seen);
+    }
+
+    /** 模糊搜索物料 */
+    function fuzzySearchMaterials(query, field) {
+        if (!query) return [];
+        var q = query.toLowerCase();
+        return materials.filter(function (m) {
+            return m[field] && m[field].toLowerCase().includes(q);
+        });
+    }
+
+    /** 渲染物料编码/图号下拉 */
+    function renderMaterialDropdown(dropdownId, items, displayField, sourceInputId) {
+        var dropdown = document.getElementById(dropdownId);
+        if (items.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-empty">无匹配结果</div>';
+            dropdown.classList.add('dropdown--open');
+            return;
+        }
+        var query = document.getElementById(sourceInputId).value;
+        dropdown.innerHTML = items.map(function (m) {
+            var val = m[displayField];
+            var idx = val.toLowerCase().indexOf(query.toLowerCase());
+            var display;
+            if (idx >= 0) {
+                display = escapeHtml(val.slice(0, idx)) +
+                    '<span class="highlight">' + escapeHtml(val.slice(idx, idx + query.length)) + '</span>' +
+                    escapeHtml(val.slice(idx + query.length));
+            } else {
+                display = escapeHtml(val);
+            }
+            return (
+                '<div class="dropdown-item" data-customer="' + escapeHtml(m.customer || '') +
+                '" data-code="' + escapeHtml(m.materialCode) +
+                '" data-drawing="' + escapeHtml(m.drawingNo) + '">' +
+                display + ' <span style="color:#999;font-size:12px;">→ ' +
+                escapeHtml(m.customer || '') + ' | ' + escapeHtml(m.materialCode) +
+                ' | ' + escapeHtml(m.drawingNo) + '</span></div>'
+            );
+        }).join('');
+        dropdown.classList.add('dropdown--open');
+
+        // 绑定点击事件
+        dropdown.querySelectorAll('.dropdown-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                document.getElementById('customer').value = item.dataset.customer;
+                document.getElementById('materialCode').value = item.dataset.code;
+                document.getElementById('drawingNo').value = item.dataset.drawing;
+                dropdown.classList.remove('dropdown--open');
+            });
+        });
+    }
+
+    /** 渲染客户名称下拉 */
+    function renderCustomerDropdown(customers) {
+        var dropdown = document.getElementById('customerDropdown');
+        if (customers.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-empty">无匹配结果</div>';
+            dropdown.classList.add('dropdown--open');
+            return;
+        }
+        var query = document.getElementById('customer').value;
+        dropdown.innerHTML = customers.map(function (c) {
+            var idx = c.toLowerCase().indexOf(query.toLowerCase());
+            var display;
+            if (idx >= 0) {
+                display = escapeHtml(c.slice(0, idx)) +
+                    '<span class="highlight">' + escapeHtml(c.slice(idx, idx + query.length)) + '</span>' +
+                    escapeHtml(c.slice(idx + query.length));
+            } else {
+                display = escapeHtml(c);
+            }
+            return '<div class="dropdown-item" data-customer="' + escapeHtml(c) + '">' + display + '</div>';
+        }).join('');
+        dropdown.classList.add('dropdown--open');
+
+        dropdown.querySelectorAll('.dropdown-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                document.getElementById('customer').value = item.dataset.customer;
+                dropdown.classList.remove('dropdown--open');
+            });
+        });
+    }
+
+    // 绑定输入事件
+    document.getElementById('customer').addEventListener('input', function () {
+        var val = this.value.trim();
+        var dropdown = document.getElementById('customerDropdown');
+        if (!val) { dropdown.classList.remove('dropdown--open'); return; }
+        var allCustomers = getUniqueCustomers();
+        var matched = allCustomers.filter(function (c) {
+            return c.toLowerCase().includes(val.toLowerCase());
+        });
+        renderCustomerDropdown(matched);
+    });
+
+    document.getElementById('materialCode').addEventListener('input', function () {
+        var val = this.value.trim();
+        var dropdown = document.getElementById('materialCodeDropdown');
+        if (!val) { dropdown.classList.remove('dropdown--open'); return; }
+        renderMaterialDropdown('materialCodeDropdown', fuzzySearchMaterials(val, 'materialCode'), 'materialCode', 'materialCode');
+    });
+
+    document.getElementById('drawingNo').addEventListener('input', function () {
+        var val = this.value.trim();
+        var dropdown = document.getElementById('drawingNoDropdown');
+        if (!val) { dropdown.classList.remove('dropdown--open'); return; }
+        renderMaterialDropdown('drawingNoDropdown', fuzzySearchMaterials(val, 'drawingNo'), 'drawingNo', 'drawingNo');
+    });
+
+    // 全局点击关闭下拉
+    document.addEventListener('click', function (e) {
+        ['customer', 'materialCode', 'drawingNo'].forEach(function (field) {
+            if (!e.target.closest('#' + field) && !e.target.closest('#' + field + 'Dropdown')) {
+                document.getElementById(field + 'Dropdown').classList.remove('dropdown--open');
+            }
+        });
+    });
+
+    /* =============================================================================
+     * 不合格原因联动
+     * ============================================================================= */
+
+    function updateDefectReasonVisibility() {
+        var isCustom = document.getElementById('defectReason').value === '__custom__';
+        document.getElementById('customDefectReason').classList.toggle('custom-reason-input--visible', isCustom);
+        if (!isCustom) document.getElementById('customDefectReason').value = '';
+    }
+
+    /** 获取最终不合格原因值 */
+    function getDefectReasonValue() {
+        var selected = document.getElementById('defectReason').value;
+        if (selected === '__custom__') {
+            return document.getElementById('customDefectReason').value.trim();
+        }
+        return selected;
+    }
+
+    document.getElementById('defective').addEventListener('input', function () {
+        var defectCount = parseInt(this.value) || 0;
+        var group = document.getElementById('defectReasonGroup');
+        if (defectCount > 0) {
+            group.classList.add('defect-reason-group--visible');
+        } else {
+            group.classList.remove('defect-reason-group--visible');
+            document.getElementById('defectReason').value = '';
+            document.getElementById('customDefectReason').value = '';
+            document.getElementById('customDefectReason').classList.remove('custom-reason-input--visible');
+        }
+        recalculateQualified();
+    });
+
+    document.getElementById('defectReason').addEventListener('change', updateDefectReasonVisibility);
+
+    /** 自动计算合格数量 */
+    function recalculateQualified() {
+        var qty = parseInt(document.getElementById('quantity').value) || 0;
+        var def = parseInt(document.getElementById('defective').value) || 0;
+        document.getElementById('qualified').value = Math.max(0, qty - def);
+    }
+    document.getElementById('quantity').addEventListener('input', recalculateQualified);
+
+    /* =============================================================================
+     * 今日检验记录
+     * ============================================================================= */
+
+    var recordPage = 1;
+    var editingIndex = -1;
+
+    /** 获取今日记录 */
+    function getTodayRecords() {
+        return recordsByDate[CURRENT_DATE_STR] || [];
+    }
+
+    /** 渲染今日检验记录列表 */
+    function renderTodayRecords() {
+        var records = getTodayRecords();
+        var list = document.getElementById('recordList');
+
+        if (records.length === 0) {
+            list.innerHTML = '<div class="empty-state">暂无记录，请添加</div>';
+            document.getElementById('summaryRow').style.display = 'none';
+            renderRecordPagination(0);
+            refreshTodayStats();
+            return;
+        }
+
+        var totalPages = Math.ceil(records.length / CONFIG.RECORD_PAGE_SIZE);
+        if (recordPage > totalPages) recordPage = totalPages;
+        if (recordPage < 1) recordPage = 1;
+
+        var start = (recordPage - 1) * CONFIG.RECORD_PAGE_SIZE;
+        var end = start + CONFIG.RECORD_PAGE_SIZE;
+        var pageItems = records.slice(start, end);
+
+        list.innerHTML = pageItems.map(function (r, i) {
+            var realIndex = start + i;
+            var hasDefect = toNumber(r.defective) > 0;
+            return (
+                '<div class="record-item' + (hasDefect ? ' record-item--defect' : '') + '">' +
+                '<div class="record-info">' +
+                '<strong>客户：' + escapeHtml(r.customer || '-') + '</strong> | 订单：' + escapeHtml(r.orderNo || '-') + '<br>' +
+                '物料：' + escapeHtml(r.materialCode || '-') + ' | 图号：' + escapeHtml(r.drawingNo || '-') + '<br>' +
+                '数量：' + toNumber(r.quantity) + ' | 合格：' + toNumber(r.qualified) + ' | 不合格：' + toNumber(r.defective) +
+                (hasDefect && r.defectReason ? '<span class="defect-tag">' + escapeHtml(r.defectReason) + '</span>' : '') +
+                '</div>' +
+                '<div class="record-actions">' +
+                '<button class="btn-small btn-edit" onclick="editRecord(' + realIndex + ')">编辑</button>' +
+                '<button class="btn-small btn-delete" onclick="deleteRecord(' + realIndex + ')">删除</button>' +
+                '</div></div>'
+            );
+        }).join('');
+
+        document.getElementById('summaryRow').style.display = 'flex';
+        renderRecordPagination(totalPages);
+        refreshTodayStats();
+    }
+
+    function renderRecordPagination(totalPages) {
+        var div = document.getElementById('recordPagination');
+        if (totalPages <= 1) { div.innerHTML = ''; return; }
+        div.innerHTML =
+            '<button class="page-btn" onclick="changeRecordPage(' + (recordPage - 1) + ')"' +
+            (recordPage <= 1 ? ' disabled' : '') + '>上一页</button>' +
+            '<span class="page-info">' + recordPage + ' / ' + totalPages + '</span>' +
+            '<button class="page-btn" onclick="changeRecordPage(' + (recordPage + 1) + ')"' +
+            (recordPage >= totalPages ? ' disabled' : '') + '>下一页</button>';
+    }
+
+    window.changeRecordPage = function (p) {
+        recordPage = p;
+        renderTodayRecords();
+    };
+
+    /** 刷新今日统计 */
+    function refreshTodayStats() {
+        var records = getTodayRecords();
+        document.getElementById('totalCount').textContent = records.length;
+        var total = records.reduce(function (sum, r) { return sum + toNumber(r.quantity); }, 0);
+        var totalDef = records.reduce(function (sum, r) { return sum + toNumber(r.defective); }, 0);
+        document.getElementById('totalQty').textContent = total;
+        document.getElementById('totalDefect').textContent = totalDef;
+        document.getElementById('sumQty').textContent = total;
+    }
+
+    /** 清空录入表单 */
+    function clearForm() {
+        document.getElementById('customer').value = '';
+        document.getElementById('orderNo').value = '';
+        document.getElementById('materialCode').value = '';
+        document.getElementById('drawingNo').value = '';
+        document.getElementById('quantity').value = '';
+        document.getElementById('defective').value = '0';
+        document.getElementById('qualified').value = '';
+        document.getElementById('defectReason').value = '';
+        document.getElementById('customDefectReason').value = '';
+        document.getElementById('customDefectReason').classList.remove('custom-reason-input--visible');
+        document.getElementById('defectReasonGroup').classList.remove('defect-reason-group--visible');
+        document.getElementById('addBtn').style.display = 'block';
+        document.getElementById('updateBtn').style.display = 'none';
+        document.getElementById('cancelBtn').style.display = 'none';
+        editingIndex = -1;
+    }
+
+    /** 读取表单数据 */
+    function getFormData() {
+        return {
+            customer: document.getElementById('customer').value.trim(),
+            orderNo: document.getElementById('orderNo').value.trim(),
+            drawingNo: document.getElementById('drawingNo').value.trim(),
+            materialCode: document.getElementById('materialCode').value.trim(),
+            quantity: document.getElementById('quantity').value,
+            defective: document.getElementById('defective').value || '0',
+            qualified: document.getElementById('qualified').value,
+            defectReason: getDefectReasonValue()
+        };
+    }
+
+    /** 表单校验 */
+    function validateForm(data) {
+        if (!data.customer) { showToast('请输入客户'); return false; }
+        if (!data.orderNo) { showToast('请输入生产订单'); return false; }
+        if (!data.drawingNo) { showToast('请输入图号'); return false; }
+        if (!data.materialCode) { showToast('请输入物料编码'); return false; }
+        if (!data.quantity || parseInt(data.quantity) < 0) { showToast('请输入正确的数量'); return false; }
+        if (parseInt(data.defective) < 0) { showToast('请输入正确的不合格数量'); return false; }
+        if (parseInt(data.defective) > parseInt(data.quantity)) { showToast('不合格数量不能大于总数量'); return false; }
+        if (parseInt(data.defective) > 0 && !data.defectReason) {
+            var isCustom = document.getElementById('defectReason').value === '__custom__';
+            showToast(isCustom ? '请输入不合格原因' : '请选择不合格原因');
+            return false;
+        }
+        return true;
+    }
+
+    // 添加记录
+    document.getElementById('addBtn').addEventListener('click', function () {
+        var data = getFormData();
+        if (!validateForm(data)) return;
+        if (!recordsByDate[CURRENT_DATE_STR]) recordsByDate[CURRENT_DATE_STR] = [];
+        recordsByDate[CURRENT_DATE_STR].push(data);
+        saveRecords();
+        updateFilterCustomers();
+        renderTodayRecords();
+        clearForm();
+        showToast('✅ 记录已添加');
+    });
+
+    // 更新记录
+    document.getElementById('updateBtn').addEventListener('click', function () {
+        var data = getFormData();
+        if (!validateForm(data)) return;
+        recordsByDate[CURRENT_DATE_STR][editingIndex] = data;
+        saveRecords();
+        updateFilterCustomers();
+        renderTodayRecords();
+        clearForm();
+        showToast('✅ 记录已更新');
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function () {
+        clearForm();
+        showToast('已取消');
+    });
+
+    /** 编辑已有记录（回填表单） */
+    window.editRecord = function (index) {
+        var r = recordsByDate[CURRENT_DATE_STR][index];
+        document.getElementById('customer').value = r.customer;
+        document.getElementById('orderNo').value = r.orderNo;
+        document.getElementById('materialCode').value = r.materialCode;
+        document.getElementById('drawingNo').value = r.drawingNo;
+        document.getElementById('quantity').value = r.quantity;
+        document.getElementById('defective').value = r.defective;
+        document.getElementById('qualified').value = r.qualified;
+
+        var hasDefect = toNumber(r.defective) > 0;
+        var savedReason = r.defectReason || '';
+        var reasonSelect = document.getElementById('defectReason');
+        var customReasonInput = document.getElementById('customDefectReason');
+
+        if (!hasDefect) {
+            reasonSelect.value = '';
+            customReasonInput.value = '';
+            customReasonInput.classList.remove('custom-reason-input--visible');
+            document.getElementById('defectReasonGroup').classList.remove('defect-reason-group--visible');
+        } else {
+            if (savedReason && CONFIG.DEFECT_REASONS.indexOf(savedReason) === -1) {
+                reasonSelect.value = '__custom__';
+                customReasonInput.value = savedReason;
+            } else {
+                reasonSelect.value = savedReason;
+                customReasonInput.value = '';
+            }
+            updateDefectReasonVisibility();
+            document.getElementById('defectReasonGroup').classList.add('defect-reason-group--visible');
+        }
+
+        document.getElementById('addBtn').style.display = 'none';
+        document.getElementById('updateBtn').style.display = 'block';
+        document.getElementById('cancelBtn').style.display = 'block';
+        editingIndex = index;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteRecord = function (index) {
+        if (!confirm('确定删除这条记录吗？')) return;
+        recordsByDate[CURRENT_DATE_STR].splice(index, 1);
+        if (recordsByDate[CURRENT_DATE_STR].length === 0) delete recordsByDate[CURRENT_DATE_STR];
+        saveRecords();
+        updateFilterCustomers();
+        renderTodayRecords();
+        showToast('🗑️ 已删除');
+    };
+
+    /* =============================================================================
+     * 历史记录查询
+     * ============================================================================= */
+
+    var filteredHistory = [];
+    var historyPage = 1;
+    var currentHistoryFilters = { startDate: '', endDate: '', customer: '', material: '' };
+
+    /** 更新客户筛选下拉 */
+    function updateFilterCustomers() {
+        var select = document.getElementById('filterCustomer');
+        var allCustomers = {};
+        Object.values(recordsByDate).forEach(function (records) {
+            records.forEach(function (r) {
+                if (r.customer) allCustomers[r.customer] = true;
+            });
+        });
+        var names = Object.keys(allCustomers).sort(function (a, b) { return a.localeCompare(b, 'zh-CN'); });
+        select.innerHTML = '<option value="">全部客户</option>' +
+            names.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+    }
+
+    /** 获取日期预设范围 */
+    function getDatePresetRange(preset, baseDate) {
+        baseDate = baseDate || new Date();
+        var current = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+
+        if (preset === 'all') return { startDate: '', endDate: '' };
+        if (preset === 'today') {
+            var val = formatDateStr(current);
+            return { startDate: val, endDate: val };
+        }
+        if (preset === 'week') {
+            var day = current.getDay();
+            var mondayOffset = day === 0 ? -6 : 1 - day;
+            var start = new Date(current);
+            start.setDate(current.getDate() + mondayOffset);
+            var end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            return { startDate: formatDateStr(start), endDate: formatDateStr(end) };
+        }
+        // 本月
+        var start = new Date(current.getFullYear(), current.getMonth(), 1);
+        var end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+        return { startDate: formatDateStr(start), endDate: formatDateStr(end) };
+    }
+
+    function readHistoryFilters() {
+        var startDate = document.getElementById('filterStartDate').value;
+        var endDate = document.getElementById('filterEndDate').value;
+        if ((startDate && !endDate) || (!startDate && endDate)) {
+            showToast('请选择完整的开始日期和结束日期');
+            return null;
+        }
+        if (startDate && endDate && startDate > endDate) {
+            showToast('开始日期不能晚于结束日期');
+            return null;
+        }
+        return {
+            startDate: startDate || '',
+            endDate: endDate || '',
+            customer: document.getElementById('filterCustomer').value,
+            material: document.getElementById('filterMaterial').value.trim().toLowerCase()
+        };
+    }
+
+    /** 按条件筛选记录 */
+    function filterRecords(source, filters) {
+        if (!filters || (filters.startDate && filters.endDate && filters.startDate > filters.endDate)) return null;
+
+        var materialFilter = String(filters.material || '').toLowerCase();
+        var result = [];
+
+        Object.entries(source).forEach(function (entry) {
+            var date = entry[0];
+            var records = entry[1];
+
+            if (filters.startDate && date < filters.startDate) return;
+            if (filters.endDate && date > filters.endDate) return;
+
+            records.forEach(function (record, index) {
+                if (filters.customer && record.customer !== filters.customer) return;
+                var code = String(record.materialCode || '').toLowerCase();
+                if (materialFilter && code.indexOf(materialFilter) === -1) return;
+                result.push(Object.assign({}, record, { date: date, index: index }));
+            });
+        });
+
+        return result.sort(function (a, b) { return b.date.localeCompare(a.date); });
+    }
+
+    function setHistoryDatePreset(preset) {
+        var range = getDatePresetRange(preset);
+        document.getElementById('filterStartDate').value = range.startDate;
+        document.getElementById('filterEndDate').value = range.endDate;
+
+        document.querySelectorAll('.shortcut-btn').forEach(function (btn) {
+            btn.classList.toggle('shortcut-btn--active', btn.dataset.range === preset);
+        });
+        window.applyFilter();
+    }
+
+    document.querySelectorAll('.shortcut-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setHistoryDatePreset(btn.dataset.range);
+        });
+    });
+
+    function clearHistoryDatePresetSelection() {
+        document.querySelectorAll('.shortcut-btn').forEach(function (btn) {
+            btn.classList.remove('shortcut-btn--active');
+        });
+    }
+
+    ['filterStartDate', 'filterEndDate'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', clearHistoryDatePresetSelection);
+    });
+
+    window.applyFilter = function () {
+        var filters = readHistoryFilters();
+        if (!filters) return;
+        filteredHistory = filterRecords(recordsByDate, filters);
+        currentHistoryFilters = Object.assign({}, filters);
+        historyPage = 1;
+        renderHistory();
+        buildSummaryReport(filteredHistory);
+    };
+
+    function renderHistory() {
+        var list = document.getElementById('historyList');
+
+        if (filteredHistory.length === 0) {
+            list.innerHTML = '<div class="empty-state">没有找到匹配的记录</div>';
+            renderHistoryPagination(0);
+            return;
+        }
+
+        var totalPages = Math.ceil(filteredHistory.length / CONFIG.HISTORY_PAGE_SIZE);
+        if (historyPage > totalPages) historyPage = totalPages;
+        if (historyPage < 1) historyPage = 1;
+
+        var start = (historyPage - 1) * CONFIG.HISTORY_PAGE_SIZE;
+        var end = start + CONFIG.HISTORY_PAGE_SIZE;
+        var pageItems = filteredHistory.slice(start, end);
+
+        list.innerHTML = pageItems.map(function (r) {
+            var hasDefect = toNumber(r.defective) > 0;
+            return (
+                '<div class="record-item' + (hasDefect ? ' record-item--defect' : '') + '">' +
+                '<div class="record-info">' +
+                '<strong>' + escapeHtml(r.date) + '</strong> | 客户：' + escapeHtml(r.customer || '-') +
+                ' | 订单：' + escapeHtml(r.orderNo || '-') + '<br>' +
+                '物料：' + escapeHtml(r.materialCode || '-') + ' | 图号：' + escapeHtml(r.drawingNo || '-') + '<br>' +
+                '数量：' + toNumber(r.quantity) + ' | 合格：' + toNumber(r.qualified) +
+                ' | 不合格：' + toNumber(r.defective) +
+                (hasDefect && r.defectReason ? '<span class="defect-tag">' + escapeHtml(r.defectReason) + '</span>' : '') +
+                '</div></div>'
+            );
+        }).join('');
+
+        renderHistoryPagination(totalPages);
+    }
+
+    function renderHistoryPagination(totalPages) {
+        var div = document.getElementById('historyPagination');
+        if (totalPages <= 1) { div.innerHTML = ''; return; }
+        div.innerHTML =
+            '<button class="page-btn" onclick="changeHistoryPage(' + (historyPage - 1) + ')"' +
+            (historyPage <= 1 ? ' disabled' : '') + '>上一页</button>' +
+            '<span class="page-info">' + historyPage + ' / ' + totalPages + '（共' + filteredHistory.length + '条）</span>' +
+            '<button class="page-btn" onclick="changeHistoryPage(' + (historyPage + 1) + ')"' +
+            (historyPage >= totalPages ? ' disabled' : '') + '>下一页</button>';
+    }
+
+    window.changeHistoryPage = function (p) {
+        historyPage = p;
+        renderHistory();
+    };
+
+    /* =============================================================================
+     * 汇总报表
+     * ============================================================================= */
+
+    var summaryDimension = 'customer';
+    var currentSummaryRecords = [];
+
+    /** 计算汇总指标 */
+    function calcSummary(records) {
+        var quantity = records.reduce(function (sum, r) { return sum + toNumber(r.quantity); }, 0);
+        var defective = records.reduce(function (sum, r) { return sum + toNumber(r.defective); }, 0);
+        return {
+            recordCount: records.length,
+            quantity: quantity,
+            defective: defective,
+            rate: quantity > 0 ? defective / quantity * 100 : 0
+        };
+    }
+
+    /** 按维度分组汇总 */
+    function groupSummary(records, dimension) {
+        var groups = new Map();
+
+        records.forEach(function (record) {
+            var key, label;
+
+            if (dimension === 'customer') {
+                label = record.customer || '未填写客户';
+                key = label;
+            } else if (dimension === 'material') {
+                var materialCode = record.materialCode || '未填写物料';
+                var drawingNo = record.drawingNo || '未填写图号';
+                label = materialCode + ' / ' + drawingNo;
+                key = JSON.stringify([String(record.materialCode || ''), String(record.drawingNo || '')]);
+            } else {
+                if (toNumber(record.defective) === 0) return;
+                label = record.defectReason || '未填写原因';
+                key = label;
+            }
+
+            if (!groups.has(key)) {
+                groups.set(key, { key: key, label: label, recordCount: 0, quantity: 0, defective: 0, rate: 0 });
+            }
+            var row = groups.get(key);
+            row.recordCount += 1;
+            row.quantity += toNumber(record.quantity);
+            row.defective += toNumber(record.defective);
+        });
+
+        return Array.from(groups.values()).map(function (row) {
+            row.rate = row.quantity > 0 ? row.defective / row.quantity * 100 : 0;
+            return row;
+        }).sort(function (a, b) {
+            return b.rate - a.rate || b.defective - a.defective || a.label.localeCompare(b.label, 'zh-CN');
+        });
+    }
+
+    /** 构建导出数据结构 */
+    function buildSummaryExportData(records, filters) {
+        var overview = calcSummary(records);
+        var activeFilters = filters || {};
+        var dateRange = activeFilters.startDate && activeFilters.endDate
+            ? activeFilters.startDate + ' 至 ' + activeFilters.endDate
+            : '全部日期';
+
+        function buildRankingRows(dimension, label) {
+            var header = ['排名', label, '记录数', '检验数量', '不合格数量', '不合格率'];
+            var rows = groupSummary(records, dimension).map(function (row, index) {
+                return [index + 1, row.label, row.recordCount, row.quantity, row.defective, row.rate.toFixed(2) + '%'];
+            });
+            return [header].concat(rows);
+        }
+
+        return {
+            overview: [
+                ['质量汇总报表'],
+                ['日期范围', dateRange],
+                ['客户', activeFilters.customer || '全部客户'],
+                ['物料关键词', activeFilters.material || '全部物料'],
+                ['记录数', overview.recordCount],
+                ['检验数量', overview.quantity],
+                ['不合格数量', overview.defective],
+                ['不合格率', overview.rate.toFixed(2) + '%']
+            ],
+            customers: buildRankingRows('customer', '客户'),
+            materials: buildRankingRows('material', '物料/图号'),
+            reasons: buildRankingRows('reason', '不合格原因')
+        };
+    }
+
+    function getSummaryExportFilename(filters) {
+        if (filters && filters.startDate && filters.endDate) {
+            return '质量汇总报表_' + filters.startDate + '至' + filters.endDate + '.xlsx';
+        }
+        return '质量汇总报表_全部日期.xlsx';
+    }
+
+    function buildSummaryReport(records) {
+        currentSummaryRecords = records || [];
+        var summary = calcSummary(currentSummaryRecords);
+
+        document.getElementById('summaryRecordCount').textContent = summary.recordCount;
+        document.getElementById('summaryQuantity').textContent = summary.quantity;
+        document.getElementById('summaryDefective').textContent = summary.defective;
+        document.getElementById('summaryRate').textContent = summary.rate.toFixed(2) + '%';
+
+        var rows = groupSummary(currentSummaryRecords, summaryDimension);
+        var table = document.getElementById('summaryTable');
+
+        if (rows.length === 0) {
+            table.innerHTML = '<div class="empty-state">暂无汇总数据</div>';
+        } else {
+            table.innerHTML =
+                '<div class="summary-table-wrap"><table class="summary-table"><thead><tr>' +
+                '<th>排名</th><th>名称</th><th>记录数</th><th>检验数</th><th>不合格数</th><th>不合格率</th>' +
+                '</tr></thead><tbody>' +
+                rows.map(function (row, index) {
+                    return '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(row.label) +
+                        '</td><td>' + row.recordCount + '</td><td>' + row.quantity +
+                        '</td><td>' + row.defective + '</td><td>' + row.rate.toFixed(2) + '%</td></tr>';
+                }).join('') +
+                '</tbody></table></div>';
+        }
+
+        document.getElementById('exportSummaryBtn').disabled = currentSummaryRecords.length === 0;
+    }
+
+    document.querySelectorAll('.summary-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            summaryDimension = btn.dataset.dimension;
+            document.querySelectorAll('.summary-tab').forEach(function (tab) {
+                tab.classList.toggle('summary-tab--active', tab === btn);
+            });
+            buildSummaryReport(currentSummaryRecords);
+        });
+    });
+
+    document.getElementById('exportSummaryBtn').addEventListener('click', function () {
+        if (currentSummaryRecords.length === 0) {
+            showToast('没有可导出的汇总数据');
+            return;
+        }
+        if (typeof XLSX === 'undefined') {
+            showToast('导出失败：Excel组件未加载');
+            return;
+        }
+
+        var data = buildSummaryExportData(currentSummaryRecords, currentHistoryFilters);
+        var workbook = XLSX.utils.book_new();
+
+        var sheets = [
+            { name: '汇总概览', rows: data.overview },
+            { name: '按客户排行', rows: data.customers },
+            { name: '按物料排行', rows: data.materials },
+            { name: '按原因排行', rows: data.reasons }
+        ];
+
+        sheets.forEach(function (sheet) {
+            var ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+            ws['!cols'] = sheet.rows[0].map(function (_, idx) {
+                return { wch: idx === 1 ? 24 : 14 };
+            });
+            XLSX.utils.book_append_sheet(workbook, ws, sheet.name);
+        });
+
+        XLSX.writeFile(workbook, getSummaryExportFilename(currentHistoryFilters));
+        showToast('📥 汇总报表已导出');
+    });
+
+    /* =============================================================================
+     * 导出当日 Excel
+     * ============================================================================= */
+
+    document.getElementById('exportBtn').addEventListener('click', function () {
+        var records = getTodayRecords();
+        if (records.length === 0) { showToast('没有可导出的记录'); return; }
+
+        var data = [['客户', '生产订单', '图号', '物料编码', '数量', '不合格数量', '合格数量', '不合格原因']];
+
+        records.forEach(function (r) {
+            data.push([
+                r.customer, r.orderNo, r.drawingNo, r.materialCode,
+                toNumber(r.quantity), toNumber(r.defective), toNumber(r.qualified),
+                r.defectReason || ''
+            ]);
+        });
+
+        var sumQty = records.reduce(function (sum, r) { return sum + toNumber(r.quantity); }, 0);
+        var sumDef = records.reduce(function (sum, r) { return sum + toNumber(r.defective); }, 0);
+        var sumQua = records.reduce(function (sum, r) { return sum + toNumber(r.qualified); }, 0);
+        data.push(['合计', '', '', '', sumQty, sumDef, sumQua, '']);
+        data.push(['']);
+        data.push(['检验日期', CURRENT_DATE_STR]);
+        data.push(['检验员', CONFIG.INSPECTOR_NAME]);
+
+        var ws = XLSX.utils.aoa_to_sheet(data);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '检验记录');
+        ws['!cols'] = [
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 14 }
+        ];
+
+        XLSX.writeFile(wb, '检验记录_' + CURRENT_DATE_STR + '.xlsx');
+        showToast('📥 Excel已导出');
+    });
+
+    /* =============================================================================
+     * 清空今日数据
+     * ============================================================================= */
+
+    document.getElementById('clearBtn').addEventListener('click', function () {
+        if (!confirm('确定清空今日所有记录吗？此操作不可恢复！')) return;
+        delete recordsByDate[CURRENT_DATE_STR];
+        saveRecords();
+        updateFilterCustomers();
+        renderTodayRecords();
+        showToast('🗑️ 今日记录已清空');
+    });
+
+    /* =============================================================================
+     * 初始化
+     * ============================================================================= */
+
+    renderTodayRecords();
+    renderMaterials();
+    updateFilterCustomers();
+    setHistoryDatePreset('today');
+
+    </script>
+</body>
+</html>
