@@ -1916,6 +1916,25 @@
 
         XLSX.writeFile(wb, '检验记录_' + SELECTED_DATE + '.xlsx');
         showToast('📥 Excel已导出');
+
+        // 每月1日~3日自动附带全量JSON备份
+        var dayOfMonth = new Date(SELECTED_DATE + 'T00:00:00').getDate();
+        if (dayOfMonth >= 1 && dayOfMonth <= 3) {
+            var backupData = {
+                recordsByDate: recordsByDate,
+                materialDB: materials,
+                exportDate: SELECTED_DATE,
+                version: CONFIG.EXPORT_VERSION
+            };
+            var jsonBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            var jsonUrl = URL.createObjectURL(jsonBlob);
+            var jsonAnchor = document.createElement('a');
+            jsonAnchor.href = jsonUrl;
+            jsonAnchor.download = '检验系统全量备份_' + SELECTED_DATE + '.json';
+            jsonAnchor.click();
+            URL.revokeObjectURL(jsonUrl);
+            showToast('📥 Excel已导出 + 月初全量备份');
+        }
     });
 
     /* =============================================================================
