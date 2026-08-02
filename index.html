@@ -504,7 +504,10 @@
     <!-- ==================== 页头 ==================== -->
     <div class="header">
         <h1>📋 检验记录表</h1>
-        <div class="date" id="currentDate"></div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
+            <span class="date" id="currentDate"></span>
+            <input type="date" id="selectedDate" value="" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:13px;width:auto;" onchange="onDateChanged(this.value)">
+        </div>
     </div>
 
     <!-- ==================== 物料库管理 ==================== -->
@@ -716,8 +719,6 @@
     });
 
     /* ==================== 日期工具 ==================== */
-    const TODAY = new Date();
-
     /** 将 Date 格式化为 "YYYY-MM-DD" 字符串 */
     function formatDateStr(date) {
         return date.getFullYear() + '-' +
@@ -725,9 +726,25 @@
             String(date.getDate()).padStart(2, '0');
     }
 
-    const CURRENT_DATE_STR = formatDateStr(TODAY);
-    document.getElementById('currentDate').textContent =
-        CURRENT_DATE_STR + ' 检验员：' + CONFIG.INSPECTOR_NAME;
+    // 当前选中的工作日期（默认今天）
+    var SELECTED_DATE = formatDateStr(new Date());
+
+    /** 更新页头日期显示 */
+    function updateDateDisplay() {
+        document.getElementById('currentDate').textContent =
+            SELECTED_DATE + ' 检验员：' + CONFIG.INSPECTOR_NAME;
+        document.getElementById('selectedDate').value = SELECTED_DATE;
+    }
+    updateDateDisplay();
+
+    /** 日期选择器变更回调 */
+    window.onDateChanged = function (newDate) {
+        if (!newDate) return;
+        SELECTED_DATE = newDate;
+        updateDateDisplay();
+        renderTodayRecords();
+        showToast('已切换到 ' + SELECTED_DATE);
+    };
 
     /* ==================== 安全 localStorage 操作 ==================== */
     function safeLoadJSON(key, fallback) {
@@ -758,8 +775,8 @@
     // 兼容旧版本数据结构（单数组 → 按日期分组）
     (function migrateLegacyData() {
         const legacy = safeLoadJSON(CONFIG.STORAGE_KEYS.LEGACY, []);
-        if (legacy.length > 0 && !Object.hasOwn(recordsByDate, CURRENT_DATE_STR)) {
-            recordsByDate[CURRENT_DATE_STR] = legacy.map(function (r) {
+        if (legacy.length > 0 && !Object.hasOwn(recordsByDate, SELECTED_DATE)) {
+            recordsByDate[SELECTED_DATE] = legacy.map(function (r) {
                 return {
                     customer: r.customer || '',
                     orderNo: r.orderNo || '',
@@ -1005,7 +1022,7 @@
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '物料库');
         ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 18 }];
-        XLSX.writeFile(wb, '物料库备份_' + CURRENT_DATE_STR + '.xlsx');
+        XLSX.writeFile(wb, '物料库备份_' + SELECTED_DATE + '.xlsx');
         showToast('📥 物料库已导出');
     });
 
@@ -1088,14 +1105,14 @@
         var allData = {
             recordsByDate: recordsByDate,
             materialDB: materials,
-            exportDate: CURRENT_DATE_STR,
+            exportDate: SELECTED_DATE,
             version: CONFIG.EXPORT_VERSION
         };
         var blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = '检验系统备份_' + CURRENT_DATE_STR + '.json';
+        a.download = '检验系统备份_' + SELECTED_DATE + '.json';
         a.click();
         URL.revokeObjectURL(url);
         showToast('📥 全部数据已导出');
@@ -1311,7 +1328,7 @@
 
     /** 获取今日记录 */
     function getTodayRecords() {
-        return recordsByDate[CURRENT_DATE_STR] || [];
+        return recordsByDate[SELECTED_DATE] || [];
     }
 
     /** 渲染今日检验记录列表 */
@@ -1439,8 +1456,8 @@
     document.getElementById('addBtn').addEventListener('click', function () {
         var data = getFormData();
         if (!validateForm(data)) return;
-        if (!recordsByDate[CURRENT_DATE_STR]) recordsByDate[CURRENT_DATE_STR] = [];
-        recordsByDate[CURRENT_DATE_STR].push(data);
+        if (!recordsByDate[SELECTED_DATE]) recordsByDate[SELECTED_DATE] = [];
+        recordsByDate[SELECTED_DATE].push(data);
         saveRecords();
         updateFilterCustomers();
         renderTodayRecords();
@@ -1452,7 +1469,7 @@
     document.getElementById('updateBtn').addEventListener('click', function () {
         var data = getFormData();
         if (!validateForm(data)) return;
-        recordsByDate[CURRENT_DATE_STR][editingIndex] = data;
+        recordsByDate[SELECTED_DATE][editingIndex] = data;
         saveRecords();
         updateFilterCustomers();
         renderTodayRecords();
@@ -1467,7 +1484,7 @@
 
     /** 编辑已有记录（回填表单） */
     window.editRecord = function (index) {
-        var r = recordsByDate[CURRENT_DATE_STR][index];
+        var r = recordsByDate[SELECTED_DATE][index];
         document.getElementById('customer').value = r.customer;
         document.getElementById('orderNo').value = r.orderNo;
         document.getElementById('materialCode').value = r.materialCode;
@@ -1507,8 +1524,8 @@
 
     window.deleteRecord = function (index) {
         if (!confirm('确定删除这条记录吗？')) return;
-        recordsByDate[CURRENT_DATE_STR].splice(index, 1);
-        if (recordsByDate[CURRENT_DATE_STR].length === 0) delete recordsByDate[CURRENT_DATE_STR];
+        recordsByDate[SELECTED_DATE].splice(index, 1);
+        if (recordsByDate[SELECTED_DATE].length === 0) delete recordsByDate[SELECTED_DATE];
         saveRecords();
         updateFilterCustomers();
         renderTodayRecords();
@@ -1886,7 +1903,7 @@
         var sumQua = records.reduce(function (sum, r) { return sum + toNumber(r.qualified); }, 0);
         data.push(['合计', '', '', '', sumQty, sumDef, sumQua, '']);
         data.push(['']);
-        data.push(['检验日期', CURRENT_DATE_STR]);
+        data.push(['检验日期', SELECTED_DATE]);
         data.push(['检验员', CONFIG.INSPECTOR_NAME]);
 
         var ws = XLSX.utils.aoa_to_sheet(data);
@@ -1897,7 +1914,7 @@
             { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 14 }
         ];
 
-        XLSX.writeFile(wb, '检验记录_' + CURRENT_DATE_STR + '.xlsx');
+        XLSX.writeFile(wb, '检验记录_' + SELECTED_DATE + '.xlsx');
         showToast('📥 Excel已导出');
     });
 
@@ -1907,7 +1924,7 @@
 
     document.getElementById('clearBtn').addEventListener('click', function () {
         if (!confirm('确定清空今日所有记录吗？此操作不可恢复！')) return;
-        delete recordsByDate[CURRENT_DATE_STR];
+        delete recordsByDate[SELECTED_DATE];
         saveRecords();
         updateFilterCustomers();
         renderTodayRecords();
