@@ -329,7 +329,7 @@
         .toggle-btn .arrow { transition: transform 0.2s; display: inline-block; }
         .toggle-btn--open .arrow { transform: rotate(180deg); }
         .collapsible { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-        .collapsible--open { max-height: 3000px; }
+        .collapsible--open { max-height: 10000px; }
 
         /* ---------- 文件上传 ---------- */
         .file-input-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; }
@@ -634,7 +634,13 @@
 
     <!-- ==================== 历史记录查询 ==================== -->
     <div class="card">
-        <div class="card-title">📜 历史记录查询</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">📜 历史记录查询</div>
+            <button class="toggle-btn" id="historyToggle" onclick="toggleHistoryPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="historyPanel">
         <div class="filter-bar">
             <input type="date" id="filterStartDate" aria-label="开始日期">
             <input type="date" id="filterEndDate" aria-label="结束日期">
@@ -652,11 +658,18 @@
         </div>
         <div class="record-list" id="historyList"><div class="empty-state">请选择条件查询历史记录</div></div>
         <div class="pagination" id="historyPagination"></div>
+        </div>
     </div>
 
     <!-- ==================== 汇总报表 ==================== -->
     <div class="card" id="summaryReportCard">
-        <div class="card-title">📊 汇总报表</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">📊 汇总报表</div>
+            <button class="toggle-btn" id="summaryToggle" onclick="toggleSummaryPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="summaryPanel">
         <div class="summary-stats">
             <div class="summary-stat"><span id="summaryRecordCount">0</span><small>记录数</small></div>
             <div class="summary-stat"><span id="summaryQuantity">0</span><small>检验总数</small></div>
@@ -670,17 +683,25 @@
         </div>
         <div id="summaryTable"></div>
         <button class="btn btn-success" id="exportSummaryBtn">📥 导出汇总报表</button>
+        </div>
     </div>
 
     <!-- ==================== 今日记录列表 ==================== -->
     <div class="card">
-        <div class="card-title">📑 今日记录列表</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">📑 今日记录列表</div>
+            <button class="toggle-btn" id="todayToggle" onclick="toggleTodayPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="todayPanel">
         <div class="record-list" id="recordList"><div class="empty-state">暂无记录，请添加</div></div>
         <div class="summary-row" id="summaryRow" style="display:none;">
             <span class="label">📦 数量合计</span>
             <span class="value" id="sumQty">0</span>
         </div>
         <div class="pagination" id="recordPagination"></div>
+        </div>
     </div>
 
     <!-- ==================== 导出数据 ==================== -->
@@ -855,6 +876,18 @@
 
     window.toggleBackupPanel = function () {
         setupToggle('backupPanel', 'backupToggle');
+    };
+
+    window.toggleHistoryPanel = function () {
+        setupToggle('historyPanel', 'historyToggle');
+    };
+
+    window.toggleSummaryPanel = function () {
+        setupToggle('summaryPanel', 'summaryToggle');
+    };
+
+    window.toggleTodayPanel = function () {
+        setupToggle('todayPanel', 'todayToggle');
     };
 
     /* =============================================================================
@@ -1962,6 +1995,6 @@
 
     </script>
 
-    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.3 — 2026-08-02</div>
+    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.4 — 2026-08-03</div>
 </body>
 </html>
