@@ -521,7 +521,7 @@
         <div class="collapsible" id="materialPanel">
             <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">🔍 查找物料（点击结果直接编辑）</div>
             <div class="search-box">
-                <input type="text" id="searchMaterialCode" placeholder="输入物料编码查找" autocomplete="off">
+                <input type="text" id="searchMaterialCode" placeholder="输入物料编码或图号查找" autocomplete="off">
                 <button class="btn btn-primary" style="padding:10px 16px;font-size:14px;" onclick="searchMaterial()">查找</button>
             </div>
             <div class="search-result" id="searchResult"></div>
@@ -915,21 +915,22 @@
         renderMaterials();
     };
 
-    /** 查找物料（模糊搜索） */
+    /** 查找物料（模糊搜索：按物料编码或图号） */
     window.searchMaterial = function () {
         var code = document.getElementById('searchMaterialCode').value.trim();
         var resultDiv = document.getElementById('searchResult');
         if (!code) {
-            resultDiv.innerHTML = '请输入物料编码';
+            resultDiv.innerHTML = '请输入物料编码或图号';
             resultDiv.classList.add('search-result--visible');
             return;
         }
         var q = code.toLowerCase();
         var found = materials.filter(function (m) {
-            return m.materialCode.toLowerCase().includes(q);
+            return (m.materialCode || '').toLowerCase().includes(q) ||
+                   (m.drawingNo || '').toLowerCase().includes(q);
         });
         if (found.length === 0) {
-            resultDiv.innerHTML = '未找到物料编码包含 "' + escapeHtml(code) + '" 的记录';
+            resultDiv.innerHTML = '未找到物料编码或图号包含 "' + escapeHtml(code) + '" 的记录';
             resultDiv.classList.add('search-result--visible');
             return;
         }
