@@ -508,6 +508,13 @@
             <span class="date" id="currentDate"></span>
             <input type="date" id="selectedDate" value="" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:13px;width:auto;" onchange="onDateChanged(this.value)">
         </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <select id="seriesSelect" onchange="onSeriesChanged(this.value)"
+                style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.92);color:#333;font-size:14px;font-weight:600;width:auto;max-width:60vw;"></select>
+            <button onclick="addSeries()" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,0.25);color:white;font-size:13px;cursor:pointer;">➕ 新建系列</button>
+            <button onclick="renameCurrentSeries()" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,0.15);color:white;font-size:13px;cursor:pointer;">✏️ 重命名</button>
+            <button onclick="deleteCurrentSeries()" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,0.15);color:white;font-size:13px;cursor:pointer;">🗑️ 删除</button>
+        </div>
     </div>
 
     <!-- ==================== 物料库管理 ==================== -->
@@ -730,9 +737,11 @@
         STORAGE_KEYS: {
             RECORDS: 'recordsByDate',
             MATERIALS: 'materialDB',
-            LEGACY: 'inspectionRecords'
+            LEGACY: 'inspectionRecords',
+            SERIES_LIST: 'seriesList'
         },
-        EXPORT_VERSION: '1.0',
+        DEFAULT_SERIES: '施耐德',
+        EXPORT_VERSION: '2.0',
         DEFECT_REASONS: Object.freeze([
             '尺寸超差', '外观不良', '材质问题', '性能不合格', '装配不良'
         ]),
@@ -789,9 +798,51 @@
         }
     }
 
-    /* ==================== 数据初始化 & 迁移 ==================== */
-    let recordsByDate = safeLoadJSON(CONFIG.STORAGE_KEYS.RECORDS, {});
-    let materials = safeLoadJSON(CONFIG.STORAGE_KEYS.MATERIALS, []);
+    /* ==================== 数据初始化 & 系列分区 ==================== */
+
+    // 系列列表（每个系列拥有独立的物料库和检验记录）
+    var seriesList = safeLoadJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, null);
+    if (!seriesList || !Array.isArray(seriesList) || seriesList.length === 0) {
+        seriesList = [CONFIG.DEFAULT_SERIES];
+        safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+    }
+    var currentSeries = seriesList[0];
+
+    /** 根据系列名生成记录存储 key */
+    function seriesRecordsKey(series) {
+        return CONFIG.STORAGE_KEYS.RECORDS + '_' + encodeURIComponent(series);
+    }
+
+    /** 根据系列名生成物料库存储 key */
+    function seriesMaterialsKey(series) {
+        return CONFIG.STORAGE_KEYS.MATERIALS + '_' + encodeURIComponent(series);
+    }
+
+    // 首次升级：把旧版本的单系列数据（旧 key）迁移到「施耐德」系列
+    (function migrateSeriesData() {
+        var migrated = false;
+        var oldRecords = localStorage.getItem(CONFIG.STORAGE_KEYS.RECORDS);
+        var oldMaterials = localStorage.getItem(CONFIG.STORAGE_KEYS.MATERIALS);
+        var newRecordsKey = seriesRecordsKey(CONFIG.DEFAULT_SERIES);
+        var newMaterialsKey = seriesMaterialsKey(CONFIG.DEFAULT_SERIES);
+
+        if (oldRecords !== null && localStorage.getItem(newRecordsKey) === null) {
+            localStorage.setItem(newRecordsKey, oldRecords);
+            migrated = true;
+        }
+        if (oldMaterials !== null && localStorage.getItem(newMaterialsKey) === null) {
+            localStorage.setItem(newMaterialsKey, oldMaterials);
+            migrated = true;
+        }
+        if (migrated && seriesList.indexOf(CONFIG.DEFAULT_SERIES) === -1) {
+            seriesList.unshift(CONFIG.DEFAULT_SERIES);
+            safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+        }
+    })();
+
+    // 当前系列的数据
+    let recordsByDate = safeLoadJSON(seriesRecordsKey(currentSeries), {});
+    let materials = safeLoadJSON(seriesMaterialsKey(currentSeries), []);
 
     // 兼容旧版本数据结构（单数组 → 按日期分组）
     (function migrateLegacyData() {
@@ -809,19 +860,125 @@
                     defectReason: r.defectReason || ''
                 };
             });
-            safeSaveJSON(CONFIG.STORAGE_KEYS.RECORDS, recordsByDate);
+            saveRecords();
             localStorage.removeItem(CONFIG.STORAGE_KEYS.LEGACY);
         }
     })();
 
-    /** 安全保存检验记录 */
+    /** 安全保存当前系列的检验记录 */
     function saveRecords() {
-        safeSaveJSON(CONFIG.STORAGE_KEYS.RECORDS, recordsByDate);
+        safeSaveJSON(seriesRecordsKey(currentSeries), recordsByDate);
     }
 
-    /** 安全保存物料库 */
+    /** 安全保存当前系列的物料库 */
     function saveMaterials() {
-        safeSaveJSON(CONFIG.STORAGE_KEYS.MATERIALS, materials);
+        safeSaveJSON(seriesMaterialsKey(currentSeries), materials);
+    }
+
+    /** 保存当前系列数据（切换系列前调用） */
+    function saveCurrentSeriesState() {
+        safeSaveJSON(seriesRecordsKey(currentSeries), recordsByDate);
+        safeSaveJSON(seriesMaterialsKey(currentSeries), materials);
+    }
+
+    /** 加载指定系列数据到内存 */
+    function loadSeriesData(series) {
+        recordsByDate = safeLoadJSON(seriesRecordsKey(series), {});
+        materials = safeLoadJSON(seriesMaterialsKey(series), []);
+    }
+
+    /** 渲染页头系列下拉框 */
+    function renderSeriesSelect() {
+        var select = document.getElementById('seriesSelect');
+        select.innerHTML = seriesList.map(function (s) {
+            return '<option value="' + escapeHtml(s) + '"' + (s === currentSeries ? ' selected' : '') + '>' + escapeHtml(s) + '</option>';
+        }).join('');
+    }
+
+    /** 切换系列 */
+    window.onSeriesChanged = function (name) {
+        if (!name || name === currentSeries) return;
+        saveCurrentSeriesState();
+        currentSeries = name;
+        loadSeriesData(name);
+        refreshAllViews();
+        showToast('已切换到系列：' + name);
+    };
+
+    /** 新建系列并切换 */
+    window.addSeries = function () {
+        var name = prompt('请输入新系列名称：');
+        if (!name) return;
+        name = name.trim();
+        if (!name) return;
+        if (seriesList.indexOf(name) !== -1) {
+            showToast('该系列已存在');
+            return;
+        }
+        saveCurrentSeriesState();
+        seriesList.push(name);
+        safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+        currentSeries = name;
+        recordsByDate = {};
+        materials = [];
+        saveCurrentSeriesState();
+        refreshAllViews();
+        showToast('✅ 系列「' + name + '」已创建并切换');
+    };
+
+    /** 重命名当前系列 */
+    window.renameCurrentSeries = function () {
+        var oldName = currentSeries;
+        var newName = prompt('请输入新的系列名称：', oldName);
+        if (!newName) return;
+        newName = newName.trim();
+        if (!newName || newName === oldName) return;
+        if (seriesList.indexOf(newName) !== -1) {
+            showToast('该系列已存在');
+            return;
+        }
+        saveCurrentSeriesState();
+        var idx = seriesList.indexOf(oldName);
+        seriesList[idx] = newName;
+        safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+
+        var oldR = localStorage.getItem(seriesRecordsKey(oldName));
+        var oldM = localStorage.getItem(seriesMaterialsKey(oldName));
+        if (oldR !== null) localStorage.setItem(seriesRecordsKey(newName), oldR);
+        if (oldM !== null) localStorage.setItem(seriesMaterialsKey(newName), oldM);
+        localStorage.removeItem(seriesRecordsKey(oldName));
+        localStorage.removeItem(seriesMaterialsKey(oldName));
+
+        currentSeries = newName;
+        refreshAllViews();
+        showToast('✅ 系列已重命名为「' + newName + '」');
+    };
+
+    /** 删除当前系列 */
+    window.deleteCurrentSeries = function () {
+        if (seriesList.length <= 1) {
+            showToast('至少保留一个系列');
+            return;
+        }
+        if (!confirm('确定删除系列「' + currentSeries + '」及其全部数据吗？此操作不可恢复！')) return;
+        localStorage.removeItem(seriesRecordsKey(currentSeries));
+        localStorage.removeItem(seriesMaterialsKey(currentSeries));
+        seriesList.splice(seriesList.indexOf(currentSeries), 1);
+        safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+        currentSeries = seriesList[0];
+        loadSeriesData(currentSeries);
+        refreshAllViews();
+        showToast('🗑️ 系列已删除');
+    };
+
+    /** 刷新所有视图（切换/新增/删除系列后调用） */
+    function refreshAllViews() {
+        updateDateDisplay();
+        renderSeriesSelect();
+        renderTodayRecords();
+        renderMaterials();
+        updateFilterCustomers();
+        setHistoryDatePreset('today');
     }
 
     /* ==================== HTML 转义 ==================== */
@@ -1136,7 +1293,9 @@
      * ============================================================================= */
 
     document.getElementById('exportAllBtn').addEventListener('click', function () {
+        // 导出当前系列的全部数据
         var allData = {
+            series: currentSeries,
             recordsByDate: recordsByDate,
             materialDB: materials,
             exportDate: SELECTED_DATE,
@@ -1146,10 +1305,10 @@
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = '检验系统备份_' + SELECTED_DATE + '.json';
+        a.download = '检验系统备份_' + currentSeries + '_' + SELECTED_DATE + '.json';
         a.click();
         URL.revokeObjectURL(url);
-        showToast('📥 全部数据已导出');
+        showToast('📥 系列「' + currentSeries + '」数据已导出');
     });
 
     window.importAllData = function (input) {
@@ -1163,15 +1322,19 @@
                     showToast('❌ 备份文件格式不对');
                     return;
                 }
-                if (!confirm('恢复数据会覆盖现有数据，确定继续吗？')) return;
+                var targetSeries = data.series || CONFIG.DEFAULT_SERIES;
+                if (!confirm('恢复数据到系列「' + targetSeries + '」，会覆盖该系列现有数据，确定继续吗？')) return;
+                if (seriesList.indexOf(targetSeries) === -1) {
+                    seriesList.push(targetSeries);
+                    safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+                }
+                currentSeries = targetSeries;
                 recordsByDate = data.recordsByDate;
                 materials = data.materialDB;
                 saveRecords();
                 saveMaterials();
-                renderMaterials();
-                renderTodayRecords();
-                updateFilterCustomers();
-                showToast('✅ 数据恢复成功');
+                refreshAllViews();
+                showToast('✅ 系列「' + targetSeries + '」数据恢复成功');
             } catch (err) {
                 showToast('❌ 恢复失败：文件损坏');
             }
@@ -1955,6 +2118,7 @@
         var dayOfMonth = new Date(SELECTED_DATE + 'T00:00:00').getDate();
         if (dayOfMonth >= 1 && dayOfMonth <= 3) {
             var backupData = {
+                series: currentSeries,
                 recordsByDate: recordsByDate,
                 materialDB: materials,
                 exportDate: SELECTED_DATE,
@@ -1964,7 +2128,7 @@
             var jsonUrl = URL.createObjectURL(jsonBlob);
             var jsonAnchor = document.createElement('a');
             jsonAnchor.href = jsonUrl;
-            jsonAnchor.download = '检验系统全量备份_' + SELECTED_DATE + '.json';
+            jsonAnchor.download = '检验系统全量备份_' + currentSeries + '_' + SELECTED_DATE + '.json';
             jsonAnchor.click();
             URL.revokeObjectURL(jsonUrl);
             showToast('📥 Excel已导出 + 月初全量备份');
@@ -1988,6 +2152,7 @@
      * 初始化
      * ============================================================================= */
 
+    renderSeriesSelect();
     renderTodayRecords();
     renderMaterials();
     updateFilterCustomers();
@@ -1995,6 +2160,6 @@
 
     </script>
 
-    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.4 — 2026-08-03</div>
+    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.5 — 2026-08-04 · 支持多系列</div>
 </body>
 </html>
