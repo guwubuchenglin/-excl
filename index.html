@@ -505,7 +505,13 @@
     <div class="header" style="position:relative;">
         <div style="position:absolute;top:14px;right:14px;z-index:50;">
             <button onclick="toggleBackupMenu()" style="padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:13px;cursor:pointer;">💾 备份</button>
-            <div id="backupMenu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:white;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.2);overflow:hidden;min-width:170px;z-index:60;">
+            <div id="backupMenu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:white;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.2);overflow:hidden;min-width:200px;z-index:60;">
+                <div style="padding:10px 16px;font-size:12px;color:#999;border-bottom:1px solid #eee;background:#fafafa;">☁️ 云同步（Cloudflare KV）</div>
+                <div onclick="cloudPush()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⬆️ 上传到云端</div>
+                <div onclick="cloudPull()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⬇️ 从云端拉取</div>
+                <div onclick="cloudSnapshots()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">🕘 云端历史快照</div>
+                <div onclick="cloudConfig()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⚙️ 云同步设置</div>
+                <div style="padding:10px 16px;font-size:12px;color:#999;border-bottom:1px solid #eee;background:#fafafa;">📦 本地文件备份</div>
                 <div onclick="exportAllSeries()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">📥 导出全部系列数据</div>
                 <div onclick="document.getElementById('importAllSeriesFile').click()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;">📤 导入全部系列数据</div>
                 <input type="file" id="importAllSeriesFile" accept=".json" style="display:none;" onchange="importAllSeries(this)">
@@ -753,7 +759,15 @@
         DEFECT_REASONS: Object.freeze([
             '尺寸超差', '外观不良', '材质问题', '性能不合格', '装配不良'
         ]),
-        TOAST_DURATION_MS: 2000
+        TOAST_DURATION_MS: 2000,
+        CLOUD_KEYS: {
+            WORKER_URL: 'cloudWorkerUrl',
+            PASSWORD: 'cloudWorkerPassword',
+            DATA_KEY: 'inspection_all'
+        },
+        // 云同步默认地址（设置里预填，方便只填密码；密码不写死，由用户填写）
+        DEFAULT_WORKER_URL: 'https://inspectionapi.dyotsit.workers.dev',
+        AUTO_CLOUD_PUSH: true // 打开页面自动上传到云端（仅当已配置地址和密码时）
     });
 
     /* ==================== 日期工具 ==================== */
@@ -1074,6 +1088,234 @@
             input.value = '';
         };
         reader.readAsText(file);
+    };
+
+    /* =============================================================================
+     * 云同步（Cloudflare KV）
+     * 需要用户先部署 worker.js 到 Cloudflare，并填写 Worker 地址和密码
+     * ============================================================================= */
+
+    function getCloudConfig() {
+        return {
+            url: localStorage.getItem(CONFIG.CLOUD_KEYS.WORKER_URL) || '',
+            password: localStorage.getItem(CONFIG.CLOUD_KEYS.PASSWORD) || ''
+        };
+    }
+
+    /** 云同步设置：填写 Worker 地址和密码（填一次后记住，不用每次填） */
+    window.cloudConfig = function () {
+        var cfg = getCloudConfig();
+        // 地址预填：已存过的用存的，没有则用默认地址
+        var url = prompt('请输入 Worker 地址（形如 https://xxx.workers.dev）：', cfg.url || CONFIG.DEFAULT_WORKER_URL);
+        if (url === null) return;
+        url = url.trim().replace(/\/+$/, '');
+        var password = prompt('请输入 Worker 写密码（WRITE_PASSWORD）：', cfg.password);
+        if (password === null) return;
+        localStorage.setItem(CONFIG.CLOUD_KEYS.WORKER_URL, url);
+        localStorage.setItem(CONFIG.CLOUD_KEYS.PASSWORD, password.trim());
+        if (url && password.trim()) {
+            showToast('✅ 云同步设置已保存');
+        }
+    };
+
+    /** 打开页面时自动上传（静默，不打扰） */
+    function autoCloudPush() {
+        if (!CONFIG.AUTO_CLOUD_PUSH) return;
+        var cfg = getCloudConfig();
+        if (!cfg.url || !cfg.password) return; // 未配置则不打扰
+        var allData = {
+            version: CONFIG.EXPORT_VERSION,
+            exportDate: SELECTED_DATE,
+            seriesList: seriesList.slice(),
+            series: {}
+        };
+        seriesList.forEach(function (s) {
+            allData.series[s] = {
+                recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
+                materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
+            };
+        });
+        fetch(cfg.url + '/?key=' + encodeURIComponent(CONFIG.CLOUD_KEYS.DATA_KEY), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-password': cfg.password
+            },
+            body: JSON.stringify(allData)
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) showToast('☁️ 已自动同步到云端');
+        })
+        .catch(function () { /* 静默失败，不打扰用户 */ });
+    }
+
+    /** 上传全部系列数据到云端 */
+    window.cloudPush = function () {
+        var cfg = getCloudConfig();
+        if (!cfg.url || !cfg.password) {
+            showToast('请先配置云同步设置');
+            cloudConfig();
+            return;
+        }
+        var allData = {
+            version: CONFIG.EXPORT_VERSION,
+            exportDate: SELECTED_DATE,
+            seriesList: seriesList.slice(),
+            series: {}
+        };
+        seriesList.forEach(function (s) {
+            allData.series[s] = {
+                recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
+                materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
+            };
+        });
+        showToast('⬆️ 正在上传到云端...');
+        fetch(cfg.url + '/?key=' + encodeURIComponent(CONFIG.CLOUD_KEYS.DATA_KEY), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-password': cfg.password
+            },
+            body: JSON.stringify(allData)
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                showToast('✅ 已上传到云端');
+            } else {
+                showToast('❌ 上传失败：' + (data.error || '未知错误'));
+            }
+        })
+        .catch(function () {
+            showToast('❌ 上传失败：网络错误或地址不对');
+        });
+    };
+
+    /** 从云端拉取全部系列数据（覆盖本地） */
+    window.cloudPull = function () {
+        var cfg = getCloudConfig();
+        if (!cfg.url || !cfg.password) {
+            showToast('请先配置云同步设置');
+            cloudConfig();
+            return;
+        }
+        if (!confirm('从云端拉取将覆盖本地全部数据，确定继续吗？')) return;
+        showToast('⬇️ 正在从云端拉取...');
+        fetch(cfg.url + '/?key=' + encodeURIComponent(CONFIG.CLOUD_KEYS.DATA_KEY), {
+            method: 'GET',
+            headers: { 'x-password': cfg.password }
+        })
+        .then(function (res) {
+            if (res.status === 404) {
+                throw new Error('云端还没有数据，请先在旧设备上传');
+            }
+            return res.json();
+        })
+        .then(function (data) {
+            if (!data.seriesList || !data.series) {
+                throw new Error('云端数据格式不对');
+            }
+            // 逐个系列写入本地
+            data.seriesList.forEach(function (s) {
+                var sd = data.series[s];
+                if (!sd) return;
+                if (sd.recordsByDate) {
+                    localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
+                }
+                if (sd.materialDB) {
+                    localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
+                }
+            });
+            seriesList = data.seriesList.slice();
+            safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+            if (seriesList.indexOf(currentSeries) === -1) {
+                currentSeries = seriesList[0];
+            }
+            loadSeriesData(currentSeries);
+            refreshAllViews();
+            showToast('✅ 已从云端拉取并覆盖本地');
+        })
+        .catch(function (err) {
+            showToast('❌ 拉取失败：' + err.message);
+        });
+    };
+
+    /** 云端历史快照：列出云端自动备份，选择某个日期恢复 */
+    window.cloudSnapshots = function () {
+        var cfg = getCloudConfig();
+        if (!cfg.url || !cfg.password) {
+            showToast('请先配置云同步设置');
+            cloudConfig();
+            return;
+        }
+        showToast('🕘 正在获取云端快照列表...');
+        fetch(cfg.url + '/snapshots', {
+            method: 'GET',
+            headers: { 'x-password': cfg.password }
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data.ok) {
+                throw new Error(data.error || '获取失败');
+            }
+            if (!data.snapshots || data.snapshots.length === 0) {
+                showToast('云端还没有历史快照');
+                return;
+            }
+            // 生成可读的日期列表让用户选择
+            var listStr = data.snapshots.map(function (name, i) {
+                var date = name.replace('backup_', '');
+                return (i + 1) + '. ' + date;
+            }).join('\n');
+            var choice = prompt(
+                '云端历史快照（共' + data.snapshots.length + '个，30天内自动保留）：\n\n' +
+                listStr + '\n\n输入序号恢复对应快照（覆盖本地数据）：'
+            );
+            if (choice === null) return;
+            var idx = parseInt(choice) - 1;
+            if (isNaN(idx) || idx < 0 || idx >= data.snapshots.length) {
+                showToast('❌ 序号无效');
+                return;
+            }
+            var snapshotKey = data.snapshots[idx];
+            if (!confirm('恢复快照 ' + snapshotKey.replace('backup_', '') + ' 将覆盖本地全部数据，确定继续吗？')) return;
+            showToast('⬇️ 正在拉取快照...');
+            fetch(cfg.url + '/?key=' + encodeURIComponent(snapshotKey), {
+                method: 'GET',
+                headers: { 'x-password': cfg.password }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (snapData) {
+                if (!snapData.seriesList || !snapData.series) {
+                    throw new Error('快照数据格式不对');
+                }
+                snapData.seriesList.forEach(function (s) {
+                    var sd = snapData.series[s];
+                    if (!sd) return;
+                    if (sd.recordsByDate) {
+                        localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
+                    }
+                    if (sd.materialDB) {
+                        localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
+                    }
+                });
+                seriesList = snapData.seriesList.slice();
+                safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+                if (seriesList.indexOf(currentSeries) === -1) {
+                    currentSeries = seriesList[0];
+                }
+                loadSeriesData(currentSeries);
+                refreshAllViews();
+                showToast('✅ 已从快照恢复');
+            })
+            .catch(function (err) {
+                showToast('❌ 快照恢复失败：' + err.message);
+            });
+        })
+        .catch(function (err) {
+            showToast('❌ 获取快照失败：' + err.message);
+        });
     };
 
     /* ==================== HTML 转义 ==================== */
@@ -2252,9 +2494,11 @@
     renderMaterials();
     updateFilterCustomers();
     setHistoryDatePreset('today');
+    // 打开页面自动上传到云端（静默，已配置才生效）
+    autoCloudPush();
 
     </script>
 
-    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.7 — 2026-08-04 · 多系列 · 全量备份</div>
+    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.9 — 2026-08-04 · 多系列 · 云同步+自动快照</div>
 </body>
 </html>
