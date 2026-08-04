@@ -765,8 +765,6 @@
             PASSWORD: 'cloudWorkerPassword',
             DATA_KEY: 'inspection_all'
         },
-        // 云同步默认地址（设置里预填，方便只填密码；密码不写死，由用户填写）
-        DEFAULT_WORKER_URL: 'https://inspectionapi.dyotsit.workers.dev',
         AUTO_CLOUD_PUSH: true // 打开页面自动上传到云端（仅当已配置地址和密码时）
     });
 
@@ -1105,8 +1103,7 @@
     /** 云同步设置：填写 Worker 地址和密码（填一次后记住，不用每次填） */
     window.cloudConfig = function () {
         var cfg = getCloudConfig();
-        // 地址预填：已存过的用存的，没有则用默认地址
-        var url = prompt('请输入 Worker 地址（形如 https://xxx.workers.dev）：', cfg.url || CONFIG.DEFAULT_WORKER_URL);
+        var url = prompt('请输入 Worker 地址（形如 https://xxx.workers.dev）：', cfg.url);
         if (url === null) return;
         url = url.trim().replace(/\/+$/, '');
         var password = prompt('请输入 Worker 写密码（WRITE_PASSWORD）：', cfg.password);
