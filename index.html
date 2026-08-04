@@ -502,7 +502,15 @@
 <body>
 
     <!-- ==================== 页头 ==================== -->
-    <div class="header">
+    <div class="header" style="position:relative;">
+        <div style="position:absolute;top:14px;right:14px;z-index:50;">
+            <button onclick="toggleBackupMenu()" style="padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:13px;cursor:pointer;">💾 备份</button>
+            <div id="backupMenu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:white;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.2);overflow:hidden;min-width:170px;z-index:60;">
+                <div onclick="exportAllSeries()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">📥 导出全部系列数据</div>
+                <div onclick="document.getElementById('importAllSeriesFile').click()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;">📤 导入全部系列数据</div>
+                <input type="file" id="importAllSeriesFile" accept=".json" style="display:none;" onchange="importAllSeries(this)">
+            </div>
+        </div>
         <h1>📋 检验记录表</h1>
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
             <span class="date" id="currentDate"></span>
@@ -980,6 +988,93 @@
         updateFilterCustomers();
         setHistoryDatePreset('today');
     }
+
+    /* =============================================================================
+     * 右上角备份菜单（全系列导出/导入，用于换手机迁移）
+     * ============================================================================= */
+
+    window.toggleBackupMenu = function () {
+        var menu = document.getElementById('backupMenu');
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    };
+
+    // 点击页面其他区域关闭备份菜单
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#backupMenu') && !e.target.closest('button[onclick="toggleBackupMenu()"]')) {
+            document.getElementById('backupMenu').style.display = 'none';
+        }
+    });
+
+    /** 导出所有系列的全部数据到一个 JSON 文件 */
+    window.exportAllSeries = function () {
+        try {
+            var allSeriesData = {
+                version: CONFIG.EXPORT_VERSION,
+                exportDate: SELECTED_DATE,
+                seriesList: seriesList.slice(),
+                series: {}
+            };
+            seriesList.forEach(function (s) {
+                allSeriesData.series[s] = {
+                    recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
+                    materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
+                };
+            });
+            var blob = new Blob([JSON.stringify(allSeriesData, null, 2)], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '检验系统全部系列备份_' + SELECTED_DATE + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('📥 全部系列数据已导出');
+        } catch (err) {
+            showToast('❌ 导出失败：' + err.message);
+        }
+    };
+
+    /** 从 JSON 恢复所有系列的全部数据 */
+    window.importAllSeries = function (input) {
+        var file = input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                var data = JSON.parse(e.target.result);
+                if (!data.seriesList || !data.series) {
+                    showToast('❌ 备份文件格式不对');
+                    return;
+                }
+                if (!confirm('导入将覆盖当前全部系列的所有数据，确定继续吗？')) return;
+
+                // 逐个系列写入存储
+                data.seriesList.forEach(function (s) {
+                    var sd = data.series[s];
+                    if (!sd) return;
+                    if (sd.recordsByDate) {
+                        localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
+                    }
+                    if (sd.materialDB) {
+                        localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
+                    }
+                });
+
+                // 更新系列列表
+                seriesList = data.seriesList.slice();
+                safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
+                if (seriesList.indexOf(currentSeries) === -1) {
+                    currentSeries = seriesList[0];
+                }
+                loadSeriesData(currentSeries);
+                refreshAllViews();
+                showToast('✅ 全部系列数据恢复成功');
+            } catch (err) {
+                showToast('❌ 恢复失败：文件损坏');
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    };
 
     /* ==================== HTML 转义 ==================== */
     const HTML_ENTITIES = Object.freeze({
@@ -2160,6 +2255,6 @@
 
     </script>
 
-    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.5 — 2026-08-04 · 支持多系列</div>
+    <div style="text-align:center;padding:12px 0 30px;color:#bbb;font-size:11px;">v2.7 — 2026-08-04 · 多系列 · 全量备份</div>
 </body>
 </html>
