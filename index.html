@@ -770,7 +770,7 @@
     /** 将 Date 格式化为 "YYYY-MM-DD" 字符串 */
     function formatDateStr(date) {
         return date.getFullYear() + '-' +
-            String(date.getMonth() + 1).padStart(2, '0') +
+            String(date.getMonth() + 1).padStart(2, '0') + '-' +
             String(date.getDate()).padStart(2, '0');
     }
 
@@ -857,6 +857,33 @@
             safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
         }
     })();
+
+    // 修复旧版日期格式错误（formatDateStr 曾缺月日间的横杠，产生 2026-0816 这类畸形 key）
+    // 云端拉取 / 快照恢复 / 文件导入后也会调用，保证拉回来的数据 key 格式正确
+    function migrateMalformedDateKeys() {
+        seriesList.forEach(function (s) {
+            var key = seriesRecordsKey(s);
+            var data = safeLoadJSON(key, null);
+            if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+            var changed = false;
+            Object.keys(data).forEach(function (k) {
+                var m = /^(\d{4})-(\d{2})(\d{2})$/.exec(k);
+                if (!m) return;
+                var fixed = m[1] + '-' + m[2] + '-' + m[3];
+                var arr = Array.isArray(data[k]) ? data[k] : [];
+                if (data[fixed] !== undefined) {
+                    var existing = Array.isArray(data[fixed]) ? data[fixed] : [];
+                    data[fixed] = existing.concat(arr);
+                } else {
+                    data[fixed] = arr;
+                }
+                delete data[k];
+                changed = true;
+            });
+            if (changed) safeSaveJSON(key, data);
+        });
+    }
+    migrateMalformedDateKeys();
 
     // 当前系列的数据
     let recordsByDate = safeLoadJSON(seriesRecordsKey(currentSeries), {});
@@ -1051,7 +1078,23 @@
         var reader = new FileReader();
         reader.onload = function (e) {
             try {
-                var data = JSON.parse(e.target.result);
+                // 剥离 BOM 头（部分编辑器保存 JSON 时带 BOM 会导致解析失败）
+                var text = String(e.target.result).replace(/^\uFEFF/, '');
+                var data = JSON.parse(text);
+
+                // 兼容单系列备份格式（{series, recordsByDate, materialDB}）→ 转为全系列格式
+                if ((!data.seriesList || !data.series) && data.recordsByDate) {
+                    var singleSeries = data.series || CONFIG.DEFAULT_SERIES;
+                    var converted = {
+                        seriesList: [singleSeries],
+                        series: {}
+                    };
+                    converted.series[singleSeries] = {
+                        recordsByDate: data.recordsByDate,
+                        materialDB: data.materialDB || []
+                    };
+                    data = converted;
+                }
                 if (!data.seriesList || !data.series) {
                     showToast('❌ 备份文件格式不对');
                     return;
@@ -1076,6 +1119,7 @@
                 if (seriesList.indexOf(currentSeries) === -1) {
                     currentSeries = seriesList[0];
                 }
+                migrateMalformedDateKeys(); // 修复导入文件中的旧格式日期 key
                 loadSeriesData(currentSeries);
                 refreshAllViews();
                 showToast('✅ 全部系列数据恢复成功');
@@ -1228,6 +1272,7 @@
             if (seriesList.indexOf(currentSeries) === -1) {
                 currentSeries = seriesList[0];
             }
+            migrateMalformedDateKeys(); // 修复云端带回的旧格式日期 key
             loadSeriesData(currentSeries);
             refreshAllViews();
             showToast('✅ 已从云端拉取并覆盖本地');
@@ -1317,6 +1362,7 @@
                 if (seriesList.indexOf(currentSeries) === -1) {
                     currentSeries = seriesList[0];
                 }
+                migrateMalformedDateKeys(); // 修复快照带回的旧格式日期 key
                 loadSeriesData(currentSeries);
                 refreshAllViews();
                 showToast('✅ 已从快照恢复');
@@ -1695,7 +1741,9 @@
         var reader = new FileReader();
         reader.onload = function (e) {
             try {
-                var data = JSON.parse(e.target.result);
+                // 剥离 BOM 头（部分编辑器保存 JSON 时带 BOM 会导致解析失败）
+                var text = String(e.target.result).replace(/^\uFEFF/, '');
+                var data = JSON.parse(text);
                 if (!data.recordsByDate || !data.materialDB) {
                     showToast('❌ 备份文件格式不对');
                     return;
@@ -1711,6 +1759,8 @@
                 materials = data.materialDB;
                 saveRecords();
                 saveMaterials();
+                migrateMalformedDateKeys(); // 修复导入文件中的旧格式日期 key
+                recordsByDate = safeLoadJSON(seriesRecordsKey(currentSeries), {}); // 重新载入修复后的数据
                 refreshAllViews();
                 showToast('✅ 系列「' + targetSeries + '」数据恢复成功');
             } catch (err) {
@@ -2231,6 +2281,8 @@
         Object.entries(source).forEach(function (entry) {
             var date = entry[0];
             var records = entry[1];
+            // 防御异常数据：某天记录不是数组时跳过
+            if (!Array.isArray(records)) return;
 
             if (filters.startDate && date < filters.startDate) return;
             if (filters.endDate && date > filters.endDate) return;
@@ -2274,13 +2326,18 @@
     });
 
     window.applyFilter = function () {
-        var filters = readHistoryFilters();
-        if (!filters) return;
-        filteredHistory = filterRecords(recordsByDate, filters);
-        currentHistoryFilters = Object.assign({}, filters);
-        historyPage = 1;
-        renderHistory();
-        buildSummaryReport(filteredHistory);
+        try {
+            var filters = readHistoryFilters();
+            if (!filters) return;
+            filteredHistory = filterRecords(recordsByDate, filters) || [];
+            currentHistoryFilters = Object.assign({}, filters);
+            historyPage = 1;
+            renderHistory();
+            buildSummaryReport(filteredHistory);
+        } catch (e) {
+            console.error('历史查询出错:', e);
+            showToast('❌ 查询出错：' + e.message);
+        }
     };
 
     function renderHistory() {
