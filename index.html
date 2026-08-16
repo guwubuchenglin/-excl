@@ -550,7 +550,7 @@
             <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;margin-top:16px;">✏️ 添加/编辑物料</div>
             <div class="form-group"><label>物料编码</label><input type="text" id="dbMaterialCode" placeholder="请输入物料编码"></div>
             <div class="form-group"><label>图号</label><input type="text" id="dbDrawingNo" placeholder="请输入图号"></div>
-            <div class="form-group"><label>客户</label><input type="text" id="dbCustomer" placeholder="请输入客户名称"></div>
+            <div class="form-group"><label>客户</label><input type="text" id="dbCustomer" placeholder="选择已有客户或直接输入新客户" autocomplete="off"><div class="dropdown" id="dbCustomerDropdown"></div></div>
             <button class="btn btn-primary" id="addMaterialBtn" style="padding:12px;font-size:15px;">💾 保存物料</button>
             <button class="btn btn-secondary" id="cancelMaterialEditBtn" style="display:none;padding:12px;font-size:15px;" onclick="cancelMaterialEdit()">❌ 取消编辑</button>
 
@@ -1488,6 +1488,7 @@
         document.getElementById('dbMaterialCode').value = '';
         document.getElementById('dbDrawingNo').value = '';
         document.getElementById('dbCustomer').value = '';
+        document.getElementById('dbCustomerDropdown').classList.remove('dropdown--open');
         editingMaterialIndex = -1;
         document.getElementById('addMaterialBtn').textContent = '💾 保存物料';
         document.getElementById('cancelMaterialEditBtn').style.display = 'none';
@@ -1523,6 +1524,7 @@
             document.getElementById('dbMaterialCode').value = '';
             document.getElementById('dbDrawingNo').value = '';
             document.getElementById('dbCustomer').value = '';
+            document.getElementById('dbCustomerDropdown').classList.remove('dropdown--open');
             showToast('✅ 已更新该物料');
             return;
         }
@@ -1533,6 +1535,7 @@
         document.getElementById('dbMaterialCode').value = '';
         document.getElementById('dbDrawingNo').value = '';
         document.getElementById('dbCustomer').value = '';
+        document.getElementById('dbCustomerDropdown').classList.remove('dropdown--open');
         showToast('✅ 物料已添加');
     });
 
@@ -1784,6 +1787,73 @@
         renderCustomerDropdown(matched);
     });
 
+    /** 渲染物料库客户名称下拉（支持新增客户入口） */
+    function renderDbCustomerDropdown(customers, inputId, dropdownId, query) {
+        var dropdown = document.getElementById(dropdownId);
+        var html = '';
+        var allCustomers = getUniqueCustomers();
+        // 输入了不存在的客户名时，提供「新增客户」入口
+        if (query.length > 0 && allCustomers.indexOf(query) === -1) {
+            html += '<div class="dropdown-item" data-action="add">' +
+                '<span style="color:var(--color-primary);font-weight:600;">➕ 新增客户：</span>' +
+                escapeHtml(query) + '</div>';
+        }
+        if (customers.length === 0 && !html) {
+            dropdown.innerHTML = allCustomers.length === 0
+                ? '<div class="dropdown-empty">暂无已有客户，可直接输入新客户名称</div>'
+                : '<div class="dropdown-empty">无匹配结果</div>';
+            dropdown.classList.add('dropdown--open');
+            return;
+        }
+        html += customers.map(function (c) {
+            var idx = c.toLowerCase().indexOf(query.toLowerCase());
+            var display;
+            if (idx >= 0) {
+                display = escapeHtml(c.slice(0, idx)) +
+                    '<span class="highlight">' + escapeHtml(c.slice(idx, idx + query.length)) + '</span>' +
+                    escapeHtml(c.slice(idx + query.length));
+            } else {
+                display = escapeHtml(c);
+            }
+            return '<div class="dropdown-item" data-customer="' + escapeHtml(c) + '">' + display + '</div>';
+        }).join('');
+        dropdown.innerHTML = html;
+        dropdown.classList.add('dropdown--open');
+
+        dropdown.querySelectorAll('.dropdown-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                if (item.dataset.action === 'add') {
+                    // 新增客户：把输入的内容作为客户名
+                    document.getElementById(inputId).value = query;
+                } else {
+                    document.getElementById(inputId).value = item.dataset.customer;
+                }
+                dropdown.classList.remove('dropdown--open');
+            });
+        });
+    }
+
+    function openDbCustomerDropdown() {
+        var input = document.getElementById('dbCustomer');
+        var val = input.value.trim();
+        var allCustomers = getUniqueCustomers();
+        var matched = allCustomers.filter(function (c) {
+            return c.toLowerCase().includes(val.toLowerCase());
+        });
+        renderDbCustomerDropdown(matched, 'dbCustomer', 'dbCustomerDropdown', val);
+    }
+
+    // 物料库客户输入框：聚焦时展示全部已有客户，输入时模糊过滤
+    document.getElementById('dbCustomer').addEventListener('focus', function () {
+        openDbCustomerDropdown();
+    });
+    document.getElementById('dbCustomer').addEventListener('input', function () {
+        var val = this.value.trim();
+        var dropdown = document.getElementById('dbCustomerDropdown');
+        if (!val) { dropdown.classList.remove('dropdown--open'); return; }
+        openDbCustomerDropdown();
+    });
+
     document.getElementById('materialCode').addEventListener('input', function () {
         var val = this.value.trim();
         var dropdown = document.getElementById('materialCodeDropdown');
@@ -1800,7 +1870,7 @@
 
     // 全局点击关闭下拉
     document.addEventListener('click', function (e) {
-        ['customer', 'materialCode', 'drawingNo'].forEach(function (field) {
+        ['customer', 'materialCode', 'drawingNo', 'dbCustomer'].forEach(function (field) {
             if (!e.target.closest('#' + field) && !e.target.closest('#' + field + 'Dropdown')) {
                 document.getElementById(field + 'Dropdown').classList.remove('dropdown--open');
             }
