@@ -632,17 +632,14 @@
             <input type="number" id="defective" value="0" placeholder="请输入不合格数量" inputmode="numeric" min="0">
         </div>
         <div class="form-group defect-reason-group" id="defectReasonGroup">
-            <label>不合格原因 <span style="color:var(--color-danger)">*</span></label>
-            <select id="defectReason">
-                <option value="">请选择原因</option>
-                <option value="尺寸超差">尺寸超差</option>
-                <option value="外观不良">外观不良</option>
-                <option value="材质问题">材质问题</option>
-                <option value="性能不合格">性能不合格</option>
-                <option value="装配不良">装配不良</option>
-                <option value="__custom__">其他（自行填写）</option>
+            <label>不良分类 <span style="color:var(--color-danger)">*</span></label>
+            <select id="defectCategory">
+                <option value="">请选择不良分类</option>
             </select>
-            <input type="text" id="customDefectReason" class="custom-reason-input" placeholder="请输入不合格原因" autocomplete="off">
+            <div style="margin-top:12px;">
+                <label>不合格原因 <span style="color:var(--color-danger)">*</span></label>
+                <input type="text" id="defectReasonInput" placeholder="请输入具体不合格原因" autocomplete="off">
+            </div>
         </div>
         <div class="form-group">
             <label>合格数量（自动计算）</label>
@@ -756,8 +753,8 @@
         },
         DEFAULT_SERIES: '施耐德',
         EXPORT_VERSION: '2.0',
-        DEFECT_REASONS: Object.freeze([
-            '尺寸超差', '外观不良', '材质问题', '性能不合格', '装配不良'
+        DEFECT_CATEGORIES: Object.freeze([
+            '外观', '尺寸', '材质', '性能', '装配', '包装', '其他'
         ]),
         TOAST_DURATION_MS: 2000,
         CLOUD_KEYS: {
@@ -877,7 +874,8 @@
                     quantity: r.quantity || 0,
                     defective: r.defective || 0,
                     qualified: r.qualified || 0,
-                    defectReason: r.defectReason || ''
+                    defectReason: r.defectReason || '',
+                    defectCategory: r.defectCategory || ''
                 };
             });
             saveRecords();
@@ -1881,19 +1879,12 @@
      * 不合格原因联动
      * ============================================================================= */
 
-    function updateDefectReasonVisibility() {
-        var isCustom = document.getElementById('defectReason').value === '__custom__';
-        document.getElementById('customDefectReason').classList.toggle('custom-reason-input--visible', isCustom);
-        if (!isCustom) document.getElementById('customDefectReason').value = '';
-    }
-
-    /** 获取最终不合格原因值 */
-    function getDefectReasonValue() {
-        var selected = document.getElementById('defectReason').value;
-        if (selected === '__custom__') {
-            return document.getElementById('customDefectReason').value.trim();
-        }
-        return selected;
+    /** 不合格原因的组合展示文本（分类 - 原因，兼容旧记录无分类） */
+    function getDefectDisplay(r) {
+        var reason = r.defectReason || '';
+        if (r.defectCategory && reason) return r.defectCategory + ' - ' + reason;
+        if (r.defectCategory) return r.defectCategory;
+        return reason;
     }
 
     document.getElementById('defective').addEventListener('input', function () {
@@ -1903,14 +1894,11 @@
             group.classList.add('defect-reason-group--visible');
         } else {
             group.classList.remove('defect-reason-group--visible');
-            document.getElementById('defectReason').value = '';
-            document.getElementById('customDefectReason').value = '';
-            document.getElementById('customDefectReason').classList.remove('custom-reason-input--visible');
+            document.getElementById('defectCategory').value = '';
+            document.getElementById('defectReasonInput').value = '';
         }
         recalculateQualified();
     });
-
-    document.getElementById('defectReason').addEventListener('change', updateDefectReasonVisibility);
 
     /** 自动计算合格数量 */
     function recalculateQualified() {
@@ -1962,7 +1950,7 @@
                 '<strong>客户：' + escapeHtml(r.customer || '-') + '</strong> | 订单：' + escapeHtml(r.orderNo || '-') + '<br>' +
                 '物料：' + escapeHtml(r.materialCode || '-') + ' | 图号：' + escapeHtml(r.drawingNo || '-') + '<br>' +
                 '数量：' + toNumber(r.quantity) + ' | 合格：' + toNumber(r.qualified) + ' | 不合格：' + toNumber(r.defective) +
-                (hasDefect && r.defectReason ? '<span class="defect-tag">' + escapeHtml(r.defectReason) + '</span>' : '') +
+                (hasDefect && (r.defectReason || r.defectCategory) ? '<span class="defect-tag">' + escapeHtml(getDefectDisplay(r)) + '</span>' : '') +
                 '</div>' +
                 '<div class="record-actions">' +
                 '<button class="btn-small btn-edit" onclick="editRecord(' + realIndex + ')">编辑</button>' +
@@ -2012,9 +2000,8 @@
         document.getElementById('quantity').value = '';
         document.getElementById('defective').value = '0';
         document.getElementById('qualified').value = '';
-        document.getElementById('defectReason').value = '';
-        document.getElementById('customDefectReason').value = '';
-        document.getElementById('customDefectReason').classList.remove('custom-reason-input--visible');
+        document.getElementById('defectCategory').value = '';
+        document.getElementById('defectReasonInput').value = '';
         document.getElementById('defectReasonGroup').classList.remove('defect-reason-group--visible');
         document.getElementById('addBtn').style.display = 'block';
         document.getElementById('updateBtn').style.display = 'none';
@@ -2032,7 +2019,8 @@
             quantity: document.getElementById('quantity').value,
             defective: document.getElementById('defective').value || '0',
             qualified: document.getElementById('qualified').value,
-            defectReason: getDefectReasonValue()
+            defectCategory: document.getElementById('defectCategory').value,
+            defectReason: document.getElementById('defectReasonInput').value.trim()
         };
     }
 
@@ -2045,10 +2033,9 @@
         if (!data.quantity || parseInt(data.quantity) < 0) { showToast('请输入正确的数量'); return false; }
         if (parseInt(data.defective) < 0) { showToast('请输入正确的不合格数量'); return false; }
         if (parseInt(data.defective) > parseInt(data.quantity)) { showToast('不合格数量不能大于总数量'); return false; }
-        if (parseInt(data.defective) > 0 && !data.defectReason) {
-            var isCustom = document.getElementById('defectReason').value === '__custom__';
-            showToast(isCustom ? '请输入不合格原因' : '请选择不合格原因');
-            return false;
+        if (parseInt(data.defective) > 0) {
+            if (!data.defectCategory) { showToast('请选择不良分类'); return false; }
+            if (!data.defectReason) { showToast('请输入不合格原因'); return false; }
         }
         return true;
     }
@@ -2095,24 +2082,16 @@
         document.getElementById('qualified').value = r.qualified;
 
         var hasDefect = toNumber(r.defective) > 0;
+        var savedCategory = r.defectCategory || '';
         var savedReason = r.defectReason || '';
-        var reasonSelect = document.getElementById('defectReason');
-        var customReasonInput = document.getElementById('customDefectReason');
 
         if (!hasDefect) {
-            reasonSelect.value = '';
-            customReasonInput.value = '';
-            customReasonInput.classList.remove('custom-reason-input--visible');
+            document.getElementById('defectCategory').value = '';
+            document.getElementById('defectReasonInput').value = '';
             document.getElementById('defectReasonGroup').classList.remove('defect-reason-group--visible');
         } else {
-            if (savedReason && CONFIG.DEFECT_REASONS.indexOf(savedReason) === -1) {
-                reasonSelect.value = '__custom__';
-                customReasonInput.value = savedReason;
-            } else {
-                reasonSelect.value = savedReason;
-                customReasonInput.value = '';
-            }
-            updateDefectReasonVisibility();
+            document.getElementById('defectCategory').value = savedCategory;
+            document.getElementById('defectReasonInput').value = savedReason;
             document.getElementById('defectReasonGroup').classList.add('defect-reason-group--visible');
         }
 
@@ -2288,7 +2267,7 @@
                 '物料：' + escapeHtml(r.materialCode || '-') + ' | 图号：' + escapeHtml(r.drawingNo || '-') + '<br>' +
                 '数量：' + toNumber(r.quantity) + ' | 合格：' + toNumber(r.qualified) +
                 ' | 不合格：' + toNumber(r.defective) +
-                (hasDefect && r.defectReason ? '<span class="defect-tag">' + escapeHtml(r.defectReason) + '</span>' : '') +
+                (hasDefect && (r.defectReason || r.defectCategory) ? '<span class="defect-tag">' + escapeHtml(getDefectDisplay(r)) + '</span>' : '') +
                 '</div></div>'
             );
         }).join('');
@@ -2348,7 +2327,7 @@
                 key = JSON.stringify([String(record.materialCode || ''), String(record.drawingNo || '')]);
             } else {
                 if (toNumber(record.defective) === 0) return;
-                label = record.defectReason || '未填写原因';
+                label = getDefectDisplay(record) || '未填写原因';
                 key = label;
             }
 
@@ -2369,7 +2348,7 @@
         });
     }
 
-    /** 构建导出数据结构 */
+    /** 构建导出数据结构（概览 + 按物料/图号的明细表） */
     function buildSummaryExportData(records, filters) {
         var overview = calcSummary(records);
         var activeFilters = filters || {};
@@ -2377,12 +2356,61 @@
             ? activeFilters.startDate + ' 至 ' + activeFilters.endDate
             : '全部日期';
 
-        function buildRankingRows(dimension, label) {
-            var header = ['排名', label, '记录数', '检验数量', '不合格数量', '不合格率'];
-            var rows = groupSummary(records, dimension).map(function (row, index) {
-                return [index + 1, row.label, row.recordCount, row.quantity, row.defective, row.rate.toFixed(2) + '%'];
+        /** 明细表：每个物料/图号一行（数量求和，客户取物料库或记录，不良类型+原因按组合去重合并） */
+        function buildDetailRows() {
+            var groups = new Map();
+            records.forEach(function (record) {
+                var materialCode = record.materialCode || '未填写物料';
+                var drawingNo = record.drawingNo || '未填写图号';
+                var key = JSON.stringify([String(record.materialCode || ''), String(record.drawingNo || '')]);
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        key: key,
+                        label: materialCode + ' / ' + drawingNo,
+                        customerSet: new Set(),
+                        pairSet: new Set(),
+                        quantity: 0,
+                        defective: 0
+                    });
+                }
+                var row = groups.get(key);
+                if (record.customer) row.customerSet.add(record.customer);
+                if (record.defectReason || record.defectCategory) {
+                    row.pairSet.add(JSON.stringify([record.defectCategory || '', record.defectReason || '']));
+                }
+                row.quantity += toNumber(record.quantity);
+                row.defective += toNumber(record.defective);
             });
-            return [header].concat(rows);
+
+            // 客户优先取物料库中的关联客户，其次取该物料记录中出现过的客户
+            var materialLookup = {};
+            materials.forEach(function (m) {
+                materialLookup[JSON.stringify([String(m.materialCode || ''), String(m.drawingNo || '')])] = m.customer;
+            });
+
+            return Array.from(groups.values()).map(function (row) {
+                var rate = row.quantity > 0 ? row.defective / row.quantity * 100 : 0;
+                // 无不合格时不合格率留空
+                var rateStr = row.defective > 0 ? rate.toFixed(2) + '%' : '';
+                var dbCustomer = materialLookup[row.key];
+                var customer = dbCustomer || Array.from(row.customerSet).join('、') || '未填写客户';
+
+                // 不良类型、原因按出现顺序去重合并（保持分类与原因的对应）
+                var categories = [];
+                var reasons = [];
+                Array.from(row.pairSet).map(function (s) { return JSON.parse(s); }).forEach(function (p) {
+                    if (p[0] && categories.indexOf(p[0]) === -1) categories.push(p[0]);
+                    if (p[1] && reasons.indexOf(p[1]) === -1) reasons.push(p[1]);
+                });
+                // 有不合格但未填时提示，无不合格则留空
+                var categoryStr = row.defective > 0 ? (categories.join('、') || '未填写分类') : '';
+                var reasonStr = row.defective > 0 ? (reasons.join('、') || '未填写原因') : '';
+
+                return [customer, row.label, row.quantity, row.defective, rateStr, categoryStr, reasonStr];
+            }).sort(function (a, b) {
+                var rateA = parseFloat(a[4]) || 0, rateB = parseFloat(b[4]) || 0;
+                return rateB - rateA || b[3] - a[3] || a[1].localeCompare(b[1], 'zh-CN');
+            });
         }
 
         return {
@@ -2396,9 +2424,7 @@
                 ['不合格数量', overview.defective],
                 ['不合格率', overview.rate.toFixed(2) + '%']
             ],
-            customers: buildRankingRows('customer', '客户'),
-            materials: buildRankingRows('material', '物料/图号'),
-            reasons: buildRankingRows('reason', '不合格原因')
+            detail: [['客户', '物料/图号', '检验数量', '不合格数量', '不合格率', '不良类型', '不合格原因']].concat(buildDetailRows())
         };
     }
 
@@ -2460,22 +2486,27 @@
         }
 
         var data = buildSummaryExportData(currentSummaryRecords, currentHistoryFilters);
-        var workbook = XLSX.utils.book_new();
 
-        var sheets = [
-            { name: '汇总概览', rows: data.overview },
-            { name: '按客户排行', rows: data.customers },
-            { name: '按物料排行', rows: data.materials },
-            { name: '按原因排行', rows: data.reasons }
-        ];
+        // 全部内容合并到单个工作表：概览 + 明细表，区块间空一行
+        var rows = data.overview.slice();
+        rows.push([]);
+        rows = rows.concat(data.detail);
 
-        sheets.forEach(function (sheet) {
-            var ws = XLSX.utils.aoa_to_sheet(sheet.rows);
-            ws['!cols'] = sheet.rows[0].map(function (_, idx) {
-                return { wch: idx === 1 ? 24 : 14 };
-            });
-            XLSX.utils.book_append_sheet(workbook, ws, sheet.name);
+        var ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 20 }];
+
+        // 数字与百分比文本（含不合格率）靠右对齐
+        Object.keys(ws).forEach(function (key) {
+            if (key.charAt(0) === '!') return;
+            var cell = ws[key];
+            if (cell && typeof cell.v === 'string' && /^-?\d+(\.\d+)?%?$/.test(cell.v.trim())) {
+                cell.s = cell.s || {};
+                cell.s.alignment = { horizontal: 'right' };
+            }
         });
+
+        var workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, ws, '汇总报表');
 
         XLSX.writeFile(workbook, getSummaryExportFilename(currentHistoryFilters));
         showToast('📥 汇总报表已导出');
@@ -2495,7 +2526,7 @@
             data.push([
                 r.customer, r.orderNo, r.drawingNo, r.materialCode,
                 toNumber(r.quantity), toNumber(r.defective), toNumber(r.qualified),
-                r.defectReason || ''
+                getDefectDisplay(r)
             ]);
         });
 
@@ -2561,6 +2592,11 @@
     renderMaterials();
     updateFilterCustomers();
     setHistoryDatePreset('today');
+    // 生成不良分类下拉选项
+    document.getElementById('defectCategory').innerHTML = '<option value="">请选择不良分类</option>' +
+        CONFIG.DEFECT_CATEGORIES.map(function (c) {
+            return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+        }).join('');
     // 打开页面自动上传到云端（静默，已配置才生效）
     autoCloudPush();
 
