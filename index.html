@@ -510,6 +510,7 @@
                 <div onclick="cloudPush()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⬆️ 上传到云端</div>
                 <div onclick="cloudPull()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⬇️ 从云端拉取</div>
                 <div onclick="cloudSnapshots()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">🕘 云端历史快照</div>
+                <div onclick="cloudCreateSnapshot()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">📸 立即创建快照</div>
                 <div onclick="cloudConfig()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">⚙️ 云同步设置</div>
                 <div style="padding:10px 16px;font-size:12px;color:#999;border-bottom:1px solid #eee;background:#fafafa;">📦 本地文件备份</div>
                 <div onclick="exportAllSeries()" style="padding:12px 16px;font-size:14px;color:#333;cursor:pointer;border-bottom:1px solid #eee;">📥 导出全部系列数据</div>
@@ -1251,29 +1252,45 @@
         })
         .then(function (res) { return res.json(); })
         .then(function (data) {
-            if (!data.ok) {
-                throw new Error(data.error || '获取失败');
-            }
-            if (!data.snapshots || data.snapshots.length === 0) {
-                showToast('云端还没有历史快照');
+            if (!data.ok) throw new Error(data.error || '获取失败');
+            return data.snapshots || [];
+        })
+        .catch(function (err) {
+            // 旧版 Worker 可能没有 /snapshots 路由，回退到 /list 过滤 backup_ 前缀
+            return fetch(cfg.url + '/list', {
+                method: 'GET',
+                headers: { 'x-password': cfg.password }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data.ok) throw new Error(data.error || '获取失败');
+                return (data.keys || []).filter(function (k) { return k.indexOf('backup_') === 0; });
+            })
+            .catch(function (err2) {
+                throw new Error(err2.message + '（请确认 Cloudflare Worker 已部署最新版 worker.js）');
+            });
+        })
+        .then(function (snapshots) {
+            if (!snapshots || snapshots.length === 0) {
+                showToast('云端还没有历史快照（可用「📸 立即创建快照」，或检查 Worker 定时触发是否配置）');
                 return;
             }
             // 生成可读的日期列表让用户选择
-            var listStr = data.snapshots.map(function (name, i) {
+            var listStr = snapshots.map(function (name, i) {
                 var date = name.replace('backup_', '');
                 return (i + 1) + '. ' + date;
             }).join('\n');
             var choice = prompt(
-                '云端历史快照（共' + data.snapshots.length + '个，30天内自动保留）：\n\n' +
+                '云端历史快照（共' + snapshots.length + '个，30天内自动保留）：\n\n' +
                 listStr + '\n\n输入序号恢复对应快照（覆盖本地数据）：'
             );
             if (choice === null) return;
             var idx = parseInt(choice) - 1;
-            if (isNaN(idx) || idx < 0 || idx >= data.snapshots.length) {
+            if (isNaN(idx) || idx < 0 || idx >= snapshots.length) {
                 showToast('❌ 序号无效');
                 return;
             }
-            var snapshotKey = data.snapshots[idx];
+            var snapshotKey = snapshots[idx];
             if (!confirm('恢复快照 ' + snapshotKey.replace('backup_', '') + ' 将覆盖本地全部数据，确定继续吗？')) return;
             showToast('⬇️ 正在拉取快照...');
             fetch(cfg.url + '/?key=' + encodeURIComponent(snapshotKey), {
@@ -1310,6 +1327,32 @@
         })
         .catch(function (err) {
             showToast('❌ 获取快照失败：' + err.message);
+        });
+    };
+
+    /** 手动创建当天快照（不依赖定时触发） */
+    window.cloudCreateSnapshot = function () {
+        var cfg = getCloudConfig();
+        if (!cfg.url || !cfg.password) {
+            showToast('请先配置云同步设置');
+            cloudConfig();
+            return;
+        }
+        showToast('📸 正在创建快照...');
+        fetch(cfg.url + '/snapshot', {
+            method: 'POST',
+            headers: { 'x-password': cfg.password }
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                showToast('✅ 快照已创建：backup_' + formatDateStr(new Date()));
+            } else {
+                showToast('❌ 创建快照失败：' + (data.error || '未知错误'));
+            }
+        })
+        .catch(function () {
+            showToast('❌ 创建快照失败：网络错误，或 Worker 版本过旧（需重新部署 worker.js）');
         });
     };
 
