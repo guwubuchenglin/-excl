@@ -1784,6 +1784,45 @@
         return Array.from(seen);
     }
 
+    /** 物料唯一键：物料编码 + 图号（忽略大小写与首尾空格，避免重复入库） */
+    function materialKey(code, drawing) {
+        return String(code || '').trim().toLowerCase() + '\u0000' + String(drawing || '').trim().toLowerCase();
+    }
+
+    /**
+     * 录入检验记录时，自动把物料库中没有的产品存入物料库
+     * - 物料编码 + 图号 不存在 → 新增一条（客户一并带入）
+     * - 已存在 → 只补充空白的客户，不覆盖已有信息
+     * 返回 {added: 布尔, customerUpdated: 布尔}
+     */
+    function autoSaveMaterialFromRecord(data) {
+        var code = (data.materialCode || '').trim();
+        var drawing = (data.drawingNo || '').trim();
+        var customer = (data.customer || '').trim();
+
+        // 物料库要求编码与图号齐全，缺一不入库（记录本身允许不填图号）
+        if (!code || !drawing) return { added: false, customerUpdated: false };
+
+        var key = materialKey(code, drawing);
+        var existing = materials.find(function (m) {
+            return materialKey(m.materialCode, m.drawingNo) === key;
+        });
+
+        if (existing) {
+            // 已存在：仅当物料库该产品没有客户时，用本次录入的客户补全
+            if (customer && !existing.customer) {
+                existing.customer = customer;
+                saveMaterials();
+                return { added: false, customerUpdated: true };
+            }
+            return { added: false, customerUpdated: false };
+        }
+
+        materials.push({ materialCode: code, drawingNo: drawing, customer: customer });
+        saveMaterials();
+        return { added: true, customerUpdated: false };
+    }
+
     /** 模糊搜索物料 */
     function fuzzySearchMaterials(query, field) {
         if (!query) return [];
@@ -2140,10 +2179,12 @@
         if (!recordsByDate[SELECTED_DATE]) recordsByDate[SELECTED_DATE] = [];
         recordsByDate[SELECTED_DATE].push(data);
         saveRecords();
+        var materialResult = autoSaveMaterialFromRecord(data);
+        if (materialResult.added) renderMaterials();
         updateFilterCustomers();
         renderTodayRecords();
         clearForm();
-        showToast('✅ 记录已添加');
+        showToast(materialResult.added ? '✅ 记录已添加，该产品已自动存入物料库' : '✅ 记录已添加');
     });
 
     // 更新记录
@@ -2152,10 +2193,12 @@
         if (!validateForm(data)) return;
         recordsByDate[SELECTED_DATE][editingIndex] = data;
         saveRecords();
+        var materialResult = autoSaveMaterialFromRecord(data);
+        if (materialResult.added) renderMaterials();
         updateFilterCustomers();
         renderTodayRecords();
         clearForm();
-        showToast('✅ 记录已更新');
+        showToast(materialResult.added ? '✅ 记录已更新，该产品已自动存入物料库' : '✅ 记录已更新');
     });
 
     document.getElementById('cancelBtn').addEventListener('click', function () {
