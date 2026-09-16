@@ -410,6 +410,39 @@
         .material-item--selected { background: var(--color-primary-light); border-radius: var(--radius-md); }
         .material-checkbox { width: 20px; height: 20px; margin-right: var(--spacing-md); flex: none; }
 
+        /* ---------- 客户管理 ---------- */
+        .customer-item {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: var(--spacing-md); padding: var(--spacing-lg) var(--spacing-xl);
+            background: var(--color-gray-50); border-radius: var(--radius-lg);
+            margin-bottom: var(--spacing-md);
+        }
+        .customer-item .c-name { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-primary); word-break: break-all; }
+        .customer-item .c-stat { font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: 2px; }
+        .customer-item .c-actions { display: flex; gap: var(--spacing-sm); flex: none; }
+        .customer-bar { display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-md); }
+        .customer-bar input { flex: 1; padding: var(--spacing-md) var(--spacing-lg); border: 1.5px solid var(--color-gray-300); border-radius: var(--radius-md); font-size: var(--font-size-md); }
+
+        /* ---------- 客户删除弹窗 ---------- */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+            display: none; align-items: center; justify-content: center;
+            z-index: 900; padding: var(--spacing-xl);
+        }
+        .modal--open { display: flex; }
+        .modal-box {
+            background: var(--color-white); border-radius: var(--radius-lg);
+            padding: var(--spacing-2xl); width: 100%; max-width: 380px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+        }
+        .modal-title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--color-gray-900); margin-bottom: var(--spacing-md); word-break: break-all; }
+        .modal-note { font-size: var(--font-size-sm); color: var(--color-gray-600); margin-bottom: var(--spacing-lg); }
+        .modal-radio { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-md); color: var(--color-gray-800); padding: 6px 0; cursor: pointer; }
+        .modal-radio input { width: 18px; height: 18px; margin: 0; }
+        .modal-select { width: 100%; padding: var(--spacing-md) var(--spacing-lg); border: 1.5px solid var(--color-gray-300); border-radius: var(--radius-md); font-size: var(--font-size-md); margin-top: 6px; }
+        .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-top: var(--spacing-xl); }
+        .modal-actions .btn { margin-bottom: 0; }
+
         /* ---------- 分页 ---------- */
         .pagination {
             display: flex;
@@ -561,7 +594,7 @@
             <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;margin-top:16px;">✏️ 添加/编辑物料</div>
             <div class="form-group"><label>物料编码</label><input type="text" id="dbMaterialCode" placeholder="请输入物料编码"></div>
             <div class="form-group"><label>图号</label><input type="text" id="dbDrawingNo" placeholder="请输入图号"></div>
-            <div class="form-group"><label>客户</label><input type="text" id="dbCustomer" placeholder="选择已有客户或直接输入新客户" autocomplete="off"><div class="dropdown" id="dbCustomerDropdown"></div></div>
+            <div class="form-group"><label>客户</label><input type="text" id="dbCustomer" placeholder="选择已有客户或直接输入新客户" autocomplete="off" style="position:relative;"><button type="button" class="btn-small" style="margin-top:6px;width:100%;" onclick="openCustomerPicker()">📋 从已有客户选择</button><div class="dropdown" id="dbCustomerDropdown"></div></div>
             <button class="btn btn-primary" id="addMaterialBtn" style="padding:12px;font-size:15px;">💾 保存物料</button>
             <button class="btn btn-secondary" id="cancelMaterialEditBtn" style="display:none;padding:12px;font-size:15px;" onclick="cancelMaterialEdit()">❌ 取消编辑</button>
 
@@ -590,6 +623,46 @@
                 </div>
                 <div id="materialList"><div class="empty-state" style="padding:16px;font-size:13px;">暂无物料，请添加</div></div>
                 <div class="pagination" id="materialPagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 客户管理 ==================== -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-title card-title--inline">🧑💼 客户管理</div>
+            <button class="toggle-btn" id="customerToggle" onclick="toggleCustomerPanel()">
+                展开 <span class="arrow">▼</span>
+            </button>
+        </div>
+        <div class="collapsible" id="customerPanel">
+            <div class="merge-info" style="margin-bottom:12px;">💡 客户由物料库和检验记录里的客户名自动汇总，这里可以<strong>改名</strong>或<strong>删除</strong>。删除会同步处理名下物料的客户字段和检验记录（删除前会显示影响多少条）。</div>
+            <div class="customer-bar">
+                <input type="text" id="customerFilterInput" placeholder="输入客户名筛选" autocomplete="off" oninput="renderCustomerList()">
+                <button class="btn-small" onclick="document.getElementById('customerFilterInput').value='';renderCustomerList();">清除</button>
+            </div>
+            <div style="font-size:13px;color:#666;margin-bottom:8px;">全部客户（<span id="customerCount">0</span>个）</div>
+            <div id="customerList"></div>
+        </div>
+    </div>
+
+    <!-- 客户删除弹窗 -->
+    <div class="modal" id="customerModal">
+        <div class="modal-box">
+            <div class="modal-title" id="customerModalTitle">删除客户</div>
+            <div class="modal-note" id="customerModalStat"></div>
+            <label class="modal-radio">
+                <input type="radio" name="customerDeleteMode" value="clear" checked onchange="updateCustomerModalMode()">
+                把客户字段清空（这些物料和记录变成无客户）
+            </label>
+            <label class="modal-radio">
+                <input type="radio" name="customerDeleteMode" value="reassign" onchange="updateCustomerModalMode()">
+                转给另一个客户：
+            </label>
+            <select class="modal-select" id="customerReassignSelect"></select>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" style="padding:12px;font-size:15px;" onclick="closeCustomerModal()">取消</button>
+                <button class="btn" id="customerModalConfirmBtn" style="padding:12px;font-size:15px;background:var(--color-danger);color:white;">确认删除</button>
             </div>
         </div>
     </div>
@@ -1046,6 +1119,7 @@
         renderTodayRecords();
         renderMaterials();
         updateFilterCustomers();
+        renderCustomerList();
         setHistoryDatePreset('today');
     }
 
@@ -1678,6 +1752,7 @@
         if (materials.length === 0) materialBatchMode = false;
         renderMaterials();
         updateFilterCustomers();
+        renderCustomerList();
         showToast('🗑️ 已批量删除 ' + removed + ' 条物料');
     };
 
@@ -1694,8 +1769,275 @@
         saveMaterials();
         renderMaterials();
         updateFilterCustomers();
+        renderCustomerList();
         showToast('🗑️ 已清空物料库，共删除 ' + removed + ' 条');
     };
+
+    /* =============================================================================
+     * 客户管理（客户名不是独立数据，只是物料库和检验记录里的一个字段）
+     * ============================================================================= */
+
+    // 当前弹窗正在处理的客户
+    var pendingCustomerName = '';
+
+    /** 汇总全部系列里的客户：名称 → 物料条数 / 检验记录条数 */
+    function collectAllCustomerStats() {
+        var map = {};
+
+        function touch(name) {
+            if (!map[name]) map[name] = { name: name, materials: 0, records: 0 };
+            return map[name];
+        }
+
+        seriesList.forEach(function (s) {
+            // 当前系列用内存数据，其他系列从 localStorage 读
+            var mats = (s === currentSeries) ? materials : safeLoadJSON(seriesMaterialsKey(s), []);
+            var recs = (s === currentSeries) ? recordsByDate : safeLoadJSON(seriesRecordsKey(s), {});
+
+            (Array.isArray(mats) ? mats : []).forEach(function (m) {
+                if (m && m.customer) touch(String(m.customer)).materials++;
+            });
+            Object.keys(recs || {}).forEach(function (date) {
+                var list = recs[date];
+                if (!Array.isArray(list)) return;
+                list.forEach(function (r) {
+                    if (r && r.customer) touch(String(r.customer)).records++;
+                });
+            });
+        });
+
+        return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) {
+            return a.name.localeCompare(b.name, 'zh-CN');
+        });
+    }
+
+    /** 按名称取出某一个客户的统计 */
+    function getCustomerStat(name) {
+        var found = null;
+        collectAllCustomerStats().forEach(function (c) {
+            if (c.name === name) found = c;
+        });
+        return found || { name: name, materials: 0, records: 0 };
+    }
+
+    /** 渲染客户列表 */
+    function renderCustomerList() {
+        var list = document.getElementById('customerList');
+        var all = collectAllCustomerStats();
+        document.getElementById('customerCount').textContent = all.length;
+
+        if (all.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:16px;font-size:13px;">暂无客户，录入物料或检验记录后自动出现</div>';
+            return;
+        }
+
+        var input = document.getElementById('customerFilterInput');
+        var q = input ? input.value.trim().toLowerCase() : '';
+        var shown = q ? all.filter(function (c) { return c.name.toLowerCase().includes(q); }) : all;
+
+        if (shown.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:16px;font-size:13px;">没有匹配的客户</div>';
+            return;
+        }
+
+        list.innerHTML = shown.map(function (c) {
+            return (
+                '<div class="customer-item">' +
+                '<div style="min-width:0;">' +
+                '<div class="c-name">' + escapeHtml(c.name) + '</div>' +
+                '<div class="c-stat">物料 ' + c.materials + ' 条 · 检验记录 ' + c.records + ' 条</div>' +
+                '</div>' +
+                '<div class="c-actions">' +
+                '<button class="btn-small btn-edit" data-act="rename" data-name="' + escapeHtml(c.name) + '">改名</button>' +
+                '<button class="btn-small btn-delete" data-act="delete" data-name="' + escapeHtml(c.name) + '">删除</button>' +
+                '</div></div>'
+            );
+        }).join('');
+    }
+
+    window.toggleCustomerPanel = function () {
+        setupToggle('customerPanel', 'customerToggle');
+        if (document.getElementById('customerPanel').classList.contains('collapsible--open')) renderCustomerList();
+    };
+
+    /** 客户名批量替换：物料库 + 检验记录（全部系列） */
+    function renameCustomerEverywhere(oldName, newName) {
+        var stat = getCustomerStat(oldName);
+        if (!confirm('把客户「' + oldName + '」改名为「' + newName + '」？\n会更新物料 ' + stat.materials +
+            ' 条、检验记录 ' + stat.records + ' 条（全部系列）。')) return false;
+
+        seriesList.forEach(function (s) {
+            var reloadCurrent = (s === currentSeries);
+            var mats = reloadCurrent ? materials : safeLoadJSON(seriesMaterialsKey(s), []);
+            var recs = reloadCurrent ? recordsByDate : safeLoadJSON(seriesRecordsKey(s), {});
+            var changed = false;
+
+            (Array.isArray(mats) ? mats : []).forEach(function (m) {
+                if (m && m.customer === oldName) { m.customer = newName; changed = true; }
+            });
+            Object.keys(recs || {}).forEach(function (date) {
+                var list = recs[date];
+                if (!Array.isArray(list)) return;
+                list.forEach(function (r) {
+                    if (r && r.customer === oldName) { r.customer = newName; changed = true; }
+                });
+            });
+
+            if (!changed) return;
+            if (reloadCurrent) {
+                // 保存后再读回：localStorage 写入失败时不至于丢失数据
+                saveCurrentSeriesState();
+                loadSeriesData(currentSeries);
+            } else {
+                safeSaveJSON(seriesRecordsKey(s), recs);
+                safeSaveJSON(seriesMaterialsKey(s), mats);
+            }
+        });
+
+        updateFilterCustomers();
+        renderTodayRecords();
+        renderMaterials();
+        renderCustomerList();
+        return true;
+    }
+
+    /** 客户批量处理：清空客户字段，或转移到另一个客户（全部系列） */
+    function removeCustomerEverywhere(oldName, mode, target) {
+        var movedMaterials = 0;
+        var movedRecords = 0;
+
+        seriesList.forEach(function (s) {
+            var reloadCurrent = (s === currentSeries);
+            var mats = reloadCurrent ? materials : safeLoadJSON(seriesMaterialsKey(s), []);
+            var recs = reloadCurrent ? recordsByDate : safeLoadJSON(seriesRecordsKey(s), {});
+            var changed = false;
+
+            (Array.isArray(mats) ? mats : []).forEach(function (m) {
+                if (m && m.customer === oldName) {
+                    m.customer = (mode === 'reassign') ? target : '';
+                    movedMaterials++;
+                    changed = true;
+                }
+            });
+            Object.keys(recs || {}).forEach(function (date) {
+                var list = recs[date];
+                if (!Array.isArray(list)) return;
+                list.forEach(function (r) {
+                    if (r && r.customer === oldName) {
+                        r.customer = (mode === 'reassign') ? target : '';
+                        movedRecords++;
+                        changed = true;
+                    }
+                });
+            });
+
+            if (!changed) return;
+            if (reloadCurrent) {
+                saveCurrentSeriesState();
+                loadSeriesData(currentSeries);
+            } else {
+                safeSaveJSON(seriesRecordsKey(s), recs);
+                safeSaveJSON(seriesMaterialsKey(s), mats);
+            }
+        });
+
+        updateFilterCustomers();
+        renderTodayRecords();
+        renderMaterials();
+        renderCustomerList();
+        return { materials: movedMaterials, records: movedRecords };
+    }
+
+    /** 打开客户删除弹窗 */
+    function openCustomerDeleteModal(name) {
+        pendingCustomerName = name;
+        var stat = getCustomerStat(name);
+        document.getElementById('customerModalTitle').textContent = '删除客户：' + name;
+        document.getElementById('customerModalStat').textContent =
+            '影响范围：物料 ' + stat.materials + ' 条 · 检验记录 ' + stat.records + ' 条（全部系列）';
+
+        // 可转入的客户：除自己以外的全部客户
+        var others = collectAllCustomerStats().filter(function (c) { return c.name !== name; });
+        document.getElementById('customerReassignSelect').innerHTML = others.length === 0
+            ? '<option value="">（没有其他客户可转入）</option>'
+            : others.map(function (c) {
+                return '<option value="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) +
+                    '（物料 ' + c.materials + ' 条）</option>';
+            }).join('');
+
+        document.querySelectorAll('[name="customerDeleteMode"]').forEach(function (el) { el.checked = (el.value === 'clear'); });
+        updateCustomerModalMode();
+        document.getElementById('customerModal').classList.add('modal--open');
+    }
+
+    window.closeCustomerModal = function () {
+        document.getElementById('customerModal').classList.remove('modal--open');
+        pendingCustomerName = '';
+    };
+
+    /** 切换「清空 / 转入其他客户」时，控制下拉是否可用 */
+    window.updateCustomerModalMode = function () {
+        var mode = 'clear';
+        document.querySelectorAll('[name="customerDeleteMode"]').forEach(function (el) { if (el.checked) mode = el.value; });
+        var select = document.getElementById('customerReassignSelect');
+        select.disabled = (mode !== 'reassign');
+        select.style.opacity = (mode === 'reassign') ? '1' : '0.5';
+    };
+
+    // 客户列表按钮：改名 / 删除（事件委托，客户名带引号也不会出问题）
+    document.getElementById('customerList').addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        var name = btn.dataset.name;
+
+        if (btn.dataset.act === 'delete') {
+            openCustomerDeleteModal(name);
+            return;
+        }
+
+        // 改名
+        var input = prompt('把客户「' + name + '」改名为：', name);
+        if (input === null) return;
+        var newName = input.trim();
+        if (!newName) { showToast('客户名不能为空'); return; }
+        if (newName === name) { showToast('客户名没有变化'); return; }
+        if (renameCustomerEverywhere(name, newName)) {
+            showToast('✅ 已把「' + name + '」改名为「' + newName + '」');
+        }
+    });
+
+    // 弹窗确认按钮
+    document.getElementById('customerModalConfirmBtn').addEventListener('click', function () {
+        var name = pendingCustomerName;
+        if (!name) return;
+
+        var mode = 'clear';
+        document.querySelectorAll('[name="customerDeleteMode"]').forEach(function (el) { if (el.checked) mode = el.value; });
+        var target = '';
+        if (mode === 'reassign') {
+            target = document.getElementById('customerReassignSelect').value;
+            if (!target) { showToast('没有可转入的客户，请选择「清空客户字段」'); return; }
+        }
+
+        var stat = getCustomerStat(name);
+        var actionText = (mode === 'reassign')
+            ? '把「' + name + '」名下的物料和记录全部转给「' + target + '」'
+            : '把「' + name + '」从物料和记录里清空';
+
+        if (!confirm('确定' + actionText + '吗？\n物料 ' + stat.materials + ' 条 · 检验记录 ' + stat.records +
+            ' 条（全部系列）。此操作不可撤销，可用备份恢复。')) return;
+
+        var result = removeCustomerEverywhere(name, mode, target);
+        window.closeCustomerModal();
+        showToast(mode === 'reassign'
+            ? '✅ 已转给「' + target + '」，共处理物料 ' + result.materials + ' 条、记录 ' + result.records + ' 条'
+            : '🗑️ 客户「' + name + '」已删除，处理物料 ' + result.materials + ' 条、记录 ' + result.records + ' 条');
+    });
+
+    // 点遮罩关闭弹窗
+    document.getElementById('customerModal').addEventListener('click', function (e) {
+        if (e.target === this) window.closeCustomerModal();
+    });
 
     function renderMaterialPagination(totalPages) {
         var div = document.getElementById('materialPagination');
@@ -1887,6 +2229,8 @@
 
                 saveMaterials();
                 renderMaterials();
+                updateFilterCustomers();
+                renderCustomerList();
                 showToast('✅ 新增 ' + result.imported + ' 条，合并 ' + result.merged +
                     ' 条，跳过 ' + result.skipped + ' 条');
             } catch (err) {
@@ -2168,6 +2512,18 @@
         });
         renderDbCustomerDropdown(matched, 'dbCustomer', 'dbCustomerDropdown', val);
     }
+
+    /** 物料库「从已有客户选择」按钮：列出全部已有客户 */
+    window.openCustomerPicker = function () {
+        var input = document.getElementById('dbCustomer');
+        input.value = '';
+        var allCustomers = getUniqueCustomers();
+        if (allCustomers.length === 0) {
+            showToast('还没有已有客户，直接输入新客户名即可');
+            return;
+        }
+        renderDbCustomerDropdown(allCustomers, 'dbCustomer', 'dbCustomerDropdown', '');
+    };
 
     // 物料库客户输入框：聚焦时展示全部已有客户，输入时模糊过滤
     document.getElementById('dbCustomer').addEventListener('focus', function () {
@@ -2452,13 +2808,14 @@
     var historyPage = 1;
     var currentHistoryFilters = { startDate: '', endDate: '', customer: '', material: '' };
 
-    /** 更新客户筛选下拉 */
+    /** 更新客户筛选下拉（只统计当前系列的检验记录，避免混入其他系列的客户） */
     function updateFilterCustomers() {
         var select = document.getElementById('filterCustomer');
         var allCustomers = {};
         Object.values(recordsByDate).forEach(function (records) {
+            if (!Array.isArray(records)) return;
             records.forEach(function (r) {
-                if (r.customer) allCustomers[r.customer] = true;
+                if (r && r.customer) allCustomers[r.customer] = true;
             });
         });
         var names = Object.keys(allCustomers).sort(function (a, b) { return a.localeCompare(b, 'zh-CN'); });
@@ -2930,6 +3287,7 @@
     renderTodayRecords();
     renderMaterials();
     updateFilterCustomers();
+    renderCustomerList();
     setHistoryDatePreset('today');
     // 生成不良分类下拉选项
     document.getElementById('defectCategory').innerHTML = '<option value="">请选择不良分类</option>' +
