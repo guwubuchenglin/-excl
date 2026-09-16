@@ -300,6 +300,26 @@
         .dropdown-item .highlight { color: var(--color-primary); font-weight: var(--font-weight-semibold); }
         .dropdown-empty { padding: var(--spacing-xl) var(--spacing-2xl); font-size: var(--font-size-md); color: var(--color-gray-500); text-align: center; }
 
+        /* ---------- 发货前检查：物料库匹配提示 ---------- */
+        .ship-match-hint {
+            margin-top: 6px; font-size: var(--font-size-sm); color: var(--color-gray-600);
+            background: var(--color-gray-50); border-radius: var(--radius-md);
+            padding: 8px 10px; line-height: 1.5; word-break: break-all;
+        }
+        .ship-match-hint--ok { background: var(--color-primary-light); color: var(--color-primary); }
+        .ship-match-hint--missing { background: var(--color-warning-light); color: var(--color-amber-500); }
+        .ship-match { font-size: var(--font-size-sm); color: var(--color-primary); }
+        .ship-no-match { font-size: var(--font-size-sm); color: var(--color-amber-500); }
+
+        /* ---------- 录入区页签（检验数据 / 发货前检查） ---------- */
+        .entry-tabs { display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-xl); }
+        .entry-tab {
+            flex: 1; padding: 10px 6px; border: 1px solid var(--color-gray-400);
+            border-radius: var(--radius-md); background: var(--color-white);
+            color: var(--color-gray-700); font-size: var(--font-size-md); cursor: pointer;
+        }
+        .entry-tab--active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+
         /* ---------- 物料列表项 ---------- */
         .material-item {
             background: var(--color-gray-50);
@@ -442,6 +462,26 @@
         .modal-select { width: 100%; padding: var(--spacing-md) var(--spacing-lg); border: 1.5px solid var(--color-gray-300); border-radius: var(--radius-md); font-size: var(--font-size-md); margin-top: 6px; }
         .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-top: var(--spacing-xl); }
         .modal-actions .btn { margin-bottom: 0; }
+        .modal-box--wide { max-width: 520px; max-height: 88vh; overflow-y: auto; }
+        .import-map { margin-bottom: var(--spacing-lg); }
+        .import-map-row { display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: 8px; }
+        .import-map-label {
+            width: 74px; flex: none; font-size: var(--font-size-md);
+            font-weight: var(--font-weight-semibold); color: var(--color-gray-800);
+        }
+        .import-map-row .modal-select { margin-top: 0; flex: 1; }
+        .modal-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+        .modal-table th,
+        .modal-table td {
+            padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left;
+            max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .modal-table th { background: var(--color-gray-50); color: var(--color-gray-700); }
+        .import-warn {
+            margin-top: var(--spacing-md); padding: 8px 10px; font-size: var(--font-size-sm);
+            line-height: 1.5; border-radius: var(--radius-md);
+            background: var(--color-warning-light); color: var(--color-amber-500);
+        }
 
         /* ---------- 分页 ---------- */
         .pagination {
@@ -646,13 +686,43 @@
         </div>
     </div>
 
+    <!-- 物料库导入：确认列对应 -->
+    <div class="modal" id="materialImportModal">
+        <div class="modal-box modal-box--wide">
+            <div class="modal-title">📤 导入物料库 · 请确认列对应</div>
+            <div class="modal-note" id="materialImportHeaderNote"></div>
+
+            <div class="import-map">
+                <div class="import-map-row">
+                    <span class="import-map-label">物料编码</span>
+                    <select class="modal-select" id="materialImportColCode"></select>
+                </div>
+                <div class="import-map-row">
+                    <span class="import-map-label">图号</span>
+                    <select class="modal-select" id="materialImportColDrawing"></select>
+                </div>
+                <div class="import-map-row">
+                    <span class="import-map-label">客户</span>
+                    <select class="modal-select" id="materialImportColCustomer"></select>
+                </div>
+            </div>
+
+            <div id="materialImportPreview"></div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" style="padding:12px;font-size:15px;" onclick="closeMaterialImportModal()">取消</button>
+                <button class="btn btn-primary" style="padding:12px;font-size:15px;margin-bottom:0;" onclick="applyMaterialImport()">✅ 确认导入</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 客户删除弹窗 -->
     <div class="modal" id="customerModal">
         <div class="modal-box">
             <div class="modal-title" id="customerModalTitle">删除客户</div>
             <div class="modal-note" id="customerModalStat"></div>
             <label class="modal-radio">
-                <input type="radio" name="customerDeleteMode" value="clear" checked onchange="updateCustomerModalMode()">
+                <input type="radio" name="customerDeleteMode" id="customerDeleteModeClear" value="clear" checked onchange="updateCustomerModalMode()">
                 把客户字段清空（这些物料和记录变成无客户）
             </label>
             <label class="modal-radio">
@@ -697,9 +767,16 @@
         </div>
     </div>
 
-    <!-- ==================== 录入检验数据 ==================== -->
+    <!-- ==================== 录入检验数据 / 发货前检查 ==================== -->
     <div class="card">
         <div class="card-title">📝 录入检验数据</div>
+        <div class="entry-tabs">
+            <button type="button" class="entry-tab entry-tab--active" data-tab="inspect" onclick="switchEntryTab('inspect')">🔍 检验数据</button>
+            <button type="button" class="entry-tab" data-tab="ship" onclick="switchEntryTab('ship')">🚚 发货前检查</button>
+        </div>
+
+        <!-- ---------- 页签一：检验数据 ---------- -->
+        <div id="inspectPane">
         <div class="form-group">
             <label>客户 <span style="color:var(--color-danger)">*</span></label>
             <input type="text" id="customer" placeholder="请输入客户名称" inputmode="text" autocomplete="off">
@@ -744,6 +821,36 @@
         <button class="btn btn-primary" id="addBtn">➕ 添加记录</button>
         <button class="btn btn-success" id="updateBtn" style="display:none;">💾 保存修改</button>
         <button class="btn btn-danger" id="cancelBtn" style="display:none;">❌ 取消</button>
+        </div>
+
+        <!-- ---------- 页签二：发货前检查（只需图号 + 数量） ---------- -->
+        <div id="shipPane" style="display:none;">
+            <div class="form-group">
+                <label>图号 <span style="color:var(--color-danger)">*</span></label>
+                <input type="text" id="shipDrawingNo" placeholder="输入图号，或从物料库图号中选择" inputmode="text" autocomplete="off" list="shipDrawingList">
+                <datalist id="shipDrawingList"></datalist>
+                <div class="ship-match-hint" id="shipMatchHint">💡 输入图号后会自动到物料库匹配客户</div>
+            </div>
+            <div class="form-group">
+                <label>数量 <span style="color:var(--color-danger)">*</span></label>
+                <input type="number" id="shipQuantity" placeholder="请输入数量" inputmode="numeric" min="0">
+            </div>
+            <button class="btn btn-primary" id="shipAddBtn">➕ 添加发货前检查</button>
+            <button class="btn btn-success" id="shipUpdateBtn" style="display:none;">💾 保存修改</button>
+            <button class="btn btn-danger" id="shipCancelBtn" style="display:none;">❌ 取消</button>
+
+            <div style="margin-top:16px;">
+                <div style="font-size:13px;color:#666;margin-bottom:8px;">
+                    今日发货前检查（<span id="shipCount">0</span>条）
+                </div>
+                <div class="record-list" id="shipList"><div class="empty-state">暂无发货前检查记录</div></div>
+                <div class="summary-row" id="shipSummaryRow" style="display:none;">
+                    <span class="label">🚚 数量合计</span>
+                    <span class="value" id="shipSumQty">0</span>
+                </div>
+                <div class="pagination" id="shipPagination"></div>
+            </div>
+        </div>
     </div>
 
     <!-- ==================== 历史记录查询 ==================== -->
@@ -844,6 +951,7 @@
         STORAGE_KEYS: {
             RECORDS: 'recordsByDate',
             MATERIALS: 'materialDB',
+            SHIPS: 'shipRecordsByDate',
             LEGACY: 'inspectionRecords',
             SERIES_LIST: 'seriesList'
         },
@@ -886,6 +994,7 @@
         SELECTED_DATE = newDate;
         updateDateDisplay();
         renderTodayRecords();
+        renderShipRecords();
         showToast('已切换到 ' + SELECTED_DATE);
     };
 
@@ -929,6 +1038,46 @@
     /** 根据系列名生成物料库存储 key */
     function seriesMaterialsKey(series) {
         return CONFIG.STORAGE_KEYS.MATERIALS + '_' + encodeURIComponent(series);
+    }
+
+    /** 根据系列名生成发货前检查存储 key */
+    function seriesShipsKey(series) {
+        return CONFIG.STORAGE_KEYS.SHIPS + '_' + encodeURIComponent(series);
+    }
+
+    /** 组装全部系列的完整数据（用于文件备份 / 云端上传 / 快照） */
+    function buildAllSeriesData() {
+        var allData = {
+            version: CONFIG.EXPORT_VERSION,
+            exportDate: SELECTED_DATE,
+            seriesList: seriesList.slice(),
+            series: {}
+        };
+        seriesList.forEach(function (s) {
+            allData.series[s] = {
+                recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
+                materialDB: safeLoadJSON(seriesMaterialsKey(s), []),
+                shipRecordsByDate: safeLoadJSON(seriesShipsKey(s), {})
+            };
+        });
+        return allData;
+    }
+
+    /**
+     * 把备份 / 云端拉取 / 快照里的系列数据写入 localStorage
+     * （缺失的字段跳过，不覆盖本地已有的数据）
+     */
+    function writeSeriesFromPayload(s, sd) {
+        if (!sd) return;
+        if (sd.recordsByDate) {
+            localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
+        }
+        if (sd.materialDB) {
+            localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
+        }
+        if (sd.shipRecordsByDate) {
+            localStorage.setItem(seriesShipsKey(s), JSON.stringify(sd.shipRecordsByDate));
+        }
     }
 
     // 首次升级：把旧版本的单系列数据（旧 key）迁移到「施耐德」系列
@@ -983,6 +1132,8 @@
     // 当前系列的数据
     let recordsByDate = safeLoadJSON(seriesRecordsKey(currentSeries), {});
     let materials = safeLoadJSON(seriesMaterialsKey(currentSeries), []);
+    // 发货前检查记录（按日期分组，只存图号 + 数量）
+    let shipRecordsByDate = safeLoadJSON(seriesShipsKey(currentSeries), {});
 
     // 兼容旧版本数据结构（单数组 → 按日期分组）
     (function migrateLegacyData() {
@@ -1016,16 +1167,23 @@
         safeSaveJSON(seriesMaterialsKey(currentSeries), materials);
     }
 
+    /** 安全保存当前系列的发货前检查记录 */
+    function saveShipRecords() {
+        safeSaveJSON(seriesShipsKey(currentSeries), shipRecordsByDate);
+    }
+
     /** 保存当前系列数据（切换系列前调用） */
     function saveCurrentSeriesState() {
         safeSaveJSON(seriesRecordsKey(currentSeries), recordsByDate);
         safeSaveJSON(seriesMaterialsKey(currentSeries), materials);
+        safeSaveJSON(seriesShipsKey(currentSeries), shipRecordsByDate);
     }
 
     /** 加载指定系列数据到内存 */
     function loadSeriesData(series) {
         recordsByDate = safeLoadJSON(seriesRecordsKey(series), {});
         materials = safeLoadJSON(seriesMaterialsKey(series), []);
+        shipRecordsByDate = safeLoadJSON(seriesShipsKey(series), {});
     }
 
     /** 渲染页头系列下拉框 */
@@ -1085,10 +1243,13 @@
 
         var oldR = localStorage.getItem(seriesRecordsKey(oldName));
         var oldM = localStorage.getItem(seriesMaterialsKey(oldName));
+        var oldS = localStorage.getItem(seriesShipsKey(oldName));
         if (oldR !== null) localStorage.setItem(seriesRecordsKey(newName), oldR);
         if (oldM !== null) localStorage.setItem(seriesMaterialsKey(newName), oldM);
+        if (oldS !== null) localStorage.setItem(seriesShipsKey(newName), oldS);
         localStorage.removeItem(seriesRecordsKey(oldName));
         localStorage.removeItem(seriesMaterialsKey(oldName));
+        localStorage.removeItem(seriesShipsKey(oldName));
 
         currentSeries = newName;
         refreshAllViews();
@@ -1104,6 +1265,7 @@
         if (!confirm('确定删除系列「' + currentSeries + '」及其全部数据吗？此操作不可恢复！')) return;
         localStorage.removeItem(seriesRecordsKey(currentSeries));
         localStorage.removeItem(seriesMaterialsKey(currentSeries));
+        localStorage.removeItem(seriesShipsKey(currentSeries));
         seriesList.splice(seriesList.indexOf(currentSeries), 1);
         safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
         currentSeries = seriesList[0];
@@ -1117,12 +1279,12 @@
         updateDateDisplay();
         renderSeriesSelect();
         renderTodayRecords();
+        renderShipRecords();
         renderMaterials();
         updateFilterCustomers();
         renderCustomerList();
         setHistoryDatePreset('today');
     }
-
     /* =============================================================================
      * 右上角备份菜单（全系列导出/导入，用于换手机迁移）
      * ============================================================================= */
@@ -1142,18 +1304,7 @@
     /** 导出所有系列的全部数据到一个 JSON 文件 */
     window.exportAllSeries = function () {
         try {
-            var allSeriesData = {
-                version: CONFIG.EXPORT_VERSION,
-                exportDate: SELECTED_DATE,
-                seriesList: seriesList.slice(),
-                series: {}
-            };
-            seriesList.forEach(function (s) {
-                allSeriesData.series[s] = {
-                    recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
-                    materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
-                };
-            });
+            var allSeriesData = buildAllSeriesData();
             var blob = new Blob([JSON.stringify(allSeriesData, null, 2)], { type: 'application/json' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
@@ -1187,7 +1338,8 @@
                     };
                     converted.series[singleSeries] = {
                         recordsByDate: data.recordsByDate,
-                        materialDB: data.materialDB || []
+                        materialDB: data.materialDB || [],
+                        shipRecordsByDate: data.shipRecordsByDate || {}
                     };
                     data = converted;
                 }
@@ -1199,14 +1351,7 @@
 
                 // 逐个系列写入存储
                 data.seriesList.forEach(function (s) {
-                    var sd = data.series[s];
-                    if (!sd) return;
-                    if (sd.recordsByDate) {
-                        localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
-                    }
-                    if (sd.materialDB) {
-                        localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
-                    }
+                    writeSeriesFromPayload(s, data.series[s]);
                 });
 
                 // 更新系列列表
@@ -1259,18 +1404,7 @@
         if (!CONFIG.AUTO_CLOUD_PUSH) return;
         var cfg = getCloudConfig();
         if (!cfg.url || !cfg.password) return; // 未配置则不打扰
-        var allData = {
-            version: CONFIG.EXPORT_VERSION,
-            exportDate: SELECTED_DATE,
-            seriesList: seriesList.slice(),
-            series: {}
-        };
-        seriesList.forEach(function (s) {
-            allData.series[s] = {
-                recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
-                materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
-            };
-        });
+        var allData = buildAllSeriesData();
         fetch(cfg.url + '/?key=' + encodeURIComponent(CONFIG.CLOUD_KEYS.DATA_KEY), {
             method: 'PUT',
             headers: {
@@ -1294,18 +1428,7 @@
             cloudConfig();
             return;
         }
-        var allData = {
-            version: CONFIG.EXPORT_VERSION,
-            exportDate: SELECTED_DATE,
-            seriesList: seriesList.slice(),
-            series: {}
-        };
-        seriesList.forEach(function (s) {
-            allData.series[s] = {
-                recordsByDate: safeLoadJSON(seriesRecordsKey(s), {}),
-                materialDB: safeLoadJSON(seriesMaterialsKey(s), [])
-            };
-        });
+        var allData = buildAllSeriesData();
         showToast('⬆️ 正在上传到云端...');
         fetch(cfg.url + '/?key=' + encodeURIComponent(CONFIG.CLOUD_KEYS.DATA_KEY), {
             method: 'PUT',
@@ -1354,14 +1477,7 @@
             }
             // 逐个系列写入本地
             data.seriesList.forEach(function (s) {
-                var sd = data.series[s];
-                if (!sd) return;
-                if (sd.recordsByDate) {
-                    localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
-                }
-                if (sd.materialDB) {
-                    localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
-                }
+                writeSeriesFromPayload(s, data.series[s]);
             });
             seriesList = data.seriesList.slice();
             safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
@@ -1444,14 +1560,7 @@
                     throw new Error('快照数据格式不对');
                 }
                 snapData.seriesList.forEach(function (s) {
-                    var sd = snapData.series[s];
-                    if (!sd) return;
-                    if (sd.recordsByDate) {
-                        localStorage.setItem(seriesRecordsKey(s), JSON.stringify(sd.recordsByDate));
-                    }
-                    if (sd.materialDB) {
-                        localStorage.setItem(seriesMaterialsKey(s), JSON.stringify(sd.materialDB));
-                    }
+                    writeSeriesFromPayload(s, snapData.series[s]);
                 });
                 seriesList = snapData.seriesList.slice();
                 safeSaveJSON(CONFIG.STORAGE_KEYS.SERIES_LIST, seriesList);
@@ -1659,16 +1768,14 @@
                     '<div class="material-info">' +
                     '<input type="checkbox" class="material-checkbox"' + (checked ? ' checked' : '') +
                     ' onclick="onMaterialCheckboxClick(' + realIndex + ', event)">' +
-                    '<span><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
-                    escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</span>' +
+                    '<span>' + materialLine(m) + '</span>' +
                     '</div></div>'
                 );
             }
 
             return (
                 '<div class="material-item">' +
-                '<div class="material-info"><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
-                escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</div>' +
+                '<div class="material-info">' + materialLine(m) + '</div>' +
                 '<div class="record-actions">' +
                 '<button class="btn-small btn-edit" onclick="editMaterial(' + realIndex + ')">编辑</button>' +
                 '<button class="btn-small btn-delete" onclick="deleteMaterial(' + realIndex + ')">删除</button>' +
@@ -2085,8 +2192,7 @@
             return (
                 '<div class="search-result-item" onclick="editMaterial(' + realIndex +
                 ');document.getElementById(\'searchResult\').classList.remove(\'search-result--visible\');">' +
-                '<div class="info"><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
-                escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</div>' +
+                '<div class="info">' + materialLine(m) + '</div>' +
                 '<span class="edit-tag" style="background:var(--color-primary);color:white;font-size:11px;' +
                 'padding:3px 8px;border-radius:4px;white-space:nowrap;">点击编辑</span></div>'
             );
@@ -2097,8 +2203,9 @@
     /** 编辑物料（回填表单） */
     window.editMaterial = function (index) {
         var m = materials[index];
-        document.getElementById('dbMaterialCode').value = m.materialCode;
-        document.getElementById('dbDrawingNo').value = m.drawingNo;
+        if (!m) return;
+        document.getElementById('dbMaterialCode').value = m.materialCode || '';
+        document.getElementById('dbDrawingNo').value = m.drawingNo || '';
         document.getElementById('dbCustomer').value = m.customer || '';
         editingMaterialIndex = index;
         document.getElementById('addMaterialBtn').textContent = '💾 更新物料';
@@ -2122,8 +2229,10 @@
         var drawing = document.getElementById('dbDrawingNo').value.trim();
         var customer = document.getElementById('dbCustomer').value.trim();
 
-        if (!code) { showToast('请输入物料编码'); return; }
         if (!drawing) { showToast('请输入图号'); return; }
+        // 手工新建要求编码；编辑时允许留空（发货前检查自动建档的条目就没有编码，
+        // 这样用户可以直接补客户或改图号，不必先造一个假的编码出来）
+        if (!code && editingMaterialIndex < 0) { showToast('请输入物料编码'); return; }
 
         // 编辑已有物料
         if (editingMaterialIndex >= 0) {
@@ -2176,7 +2285,550 @@
         showToast('📥 物料库已导出');
     });
 
-    /** 导入物料库 Excel */
+    /* =============================================================================
+     * 物料库导入：列识别 + 确认映射
+     * 老版本靠「第2列是不是够长」猜列序，遇到「物料编码,图号,客户」这种正常表格会整体错位，
+     * 所以改成：先按表头文字认，认不出再看内容特征，最后让用户确认/纠正一次
+     * ============================================================================= */
+
+    var MATERIAL_IMPORT_FIELDS = [
+        { key: 'code', label: '物料编码' },
+        { key: 'drawing', label: '图号' },
+        { key: 'customer', label: '客户' }
+    ];
+
+    // 待确认导入的物料库数据
+    var pendingMaterialRows = null;
+    var pendingMaterialFileName = '';
+    var pendingMaterialMappingSource = '';
+    var pendingMaterialHasHeader = false;
+
+    // 表头别名 → 字段
+    var MATERIAL_HEADER_ALIASES = {
+        code: ['物料编码', '物料编号', '物料号', '料号', '料品编码', '物料', '编码', 'item', 'itemno', 'itemcode', 'material', 'materialcode', 'materialno', 'partno', 'partnumber', 'sku', 'code', 'no', 'productcode', '图号物料编码', '物料代码'],
+        drawing: ['图号', '图纸号', '图纸编号', '图纸', 'drawing', 'drawingno', 'drawingnumber', 'dwg', 'dwgno', 'partdrawing', '图号/物料'],
+        customer: ['客户', '客户名称', '客户名', '厂家', '厂商', '供应商', '公司', '客户简称', 'customer', 'client', 'company', 'vendor']
+    };
+
+    // 「合计」这类汇总/说明行不导入
+    var MATERIAL_IMPORT_BAD_WORDS = ['合计', '总计', '小计', '备注', '说明', '以上', '以下', '汇总', '序号'];
+
+    /** 单元格转成干净的字符串（数字、日期都能安全处理） */
+    function cellToString(v) {
+        if (v === null || v === undefined) return '';
+        return String(v).replace(/\u00a0/g, ' ').trim();
+    }
+
+    /** 取出表头行（第 1 行） */
+    function getMaterialHeaderRow(rows) {
+        for (var i = 0; i < rows.length && i < 5; i++) {
+            if (Array.isArray(rows[i]) && rows[i].some(function (c) { return cellToString(c) !== ''; })) {
+                return rows[i];
+            }
+        }
+        return [];
+    }
+
+    /** 表头文字归一化：去掉空格、换行、括号与常见符号，转小写 */
+    function normalizeHeaderText(text) {
+        return cellToString(text)
+            .replace(/\s+/g, '')
+            .replace(/[()（）\[\]【】:：*、,，.。\-_/\\]/g, '')
+            .toLowerCase();
+    }
+
+    /**
+     * 判断一行是不是表头行
+     * - 认出来 ≥2 个常见表头词 → 是
+     * - 或者整行都是「列名长相」（以「号」结尾，或含 编码/名称/图/客户 等词），且没有任何编码/公司名/数字
+     *   这样「材料编号 | 零件图号 | 使用客户」这类没登记过的表头也能认出来，
+     *   而真实数据行（有编码、有公司名）不会被误判
+     */
+    function isMaterialHeaderRow(row) {
+        if (!Array.isArray(row)) return false;
+
+        var found = 0;
+        row.forEach(function (cell) {
+            var norm = normalizeHeaderText(cell);
+            if (!norm) return;
+            MATERIAL_IMPORT_FIELDS.forEach(function (f) {
+                if (MATERIAL_HEADER_ALIASES[f.key].indexOf(norm) !== -1) found++;
+            });
+        });
+        if (found >= 2) return true;
+
+        var signature = 0;
+        var nonEmpty = 0;
+        var contaminated = false;
+        row.forEach(function (cell) {
+            var s = cellToString(cell);
+            if (!s) return;
+            nonEmpty++;
+            if (/[0-9]/.test(s) || looksLikeCompanyName(s) || s.length > 16) { contaminated = true; return; }
+            if (/号$/.test(s) || /(编码|编号|名称|图|客户|料号|件号|规格|型号)/.test(s)) signature++;
+        });
+
+        return nonEmpty >= 2 && signature >= 2 && !contaminated;
+    }
+
+    /** 第 1 行是不是「表头长相」（有 ≥1 个已知表头词），或干脆是个标题行 */
+    function looksLikeAlmostHeaderRow(row) {
+        if (!Array.isArray(row)) return false;
+        var hits = 0;
+        row.forEach(function (cell) {
+            var norm = normalizeHeaderText(cell);
+            if (!norm) return;
+            MATERIAL_IMPORT_FIELDS.forEach(function (f) {
+                if (MATERIAL_HEADER_ALIASES[f.key].indexOf(norm) !== -1) hits++;
+            });
+        });
+        return hits >= 1;
+    }
+
+    /**
+     * 在第 1 行和它下面一行里挑真正的表头行
+     * 有些文件第 1 行是「xxx 公司物料清单」这类标题，第 2 行才是表头；
+     * 但如果第 1 行本来就能当表头，就用第 1 行，绝不跳过真实数据行
+     */
+    function findMaterialHeaderRow(rows) {
+        var first = getMaterialHeaderRow(rows);
+        if (isMaterialHeaderRow(first) || looksLikeAlmostHeaderRow(first)) {
+            return { row: first, rowIndex: 0 };
+        }
+        var second = Array.isArray(rows[1]) ? rows[1] : [];
+        if (isMaterialHeaderRow(second)) {
+            return { row: second, rowIndex: 1 };
+        }
+        return { row: first, rowIndex: 0 };
+    }
+
+    /** 表头行 → 列映射；认不全就返回 null（交给内容特征去猜） */
+    function detectMaterialMappingByHeader(headerRow) {
+        var map = { code: -1, drawing: -1, customer: -1 };
+        var hits = 0;
+
+        (headerRow || []).forEach(function (cell, i) {
+            var norm = normalizeHeaderText(cell);
+            if (!norm) return;
+            if (map.code < 0 && MATERIAL_HEADER_ALIASES.code.indexOf(norm) !== -1) { map.code = i; hits++; return; }
+            if (map.drawing < 0 && MATERIAL_HEADER_ALIASES.drawing.indexOf(norm) !== -1) { map.drawing = i; hits++; return; }
+            if (map.customer < 0 && MATERIAL_HEADER_ALIASES.customer.indexOf(norm) !== -1) { map.customer = i; hits++; return; }
+        });
+
+        // 至少认出 2 个字段才敢用表头；否则（比如表头写成「材料编号/零件图号」）退回内容识别
+        return hits >= 2 ? map : null;
+    }
+
+    /** 像公司名？ */
+    function looksLikeCompanyName(v) {
+        var s = cellToString(v);
+        if (s.length < 4) return false;
+        if (/[\(\)（）]/.test(s) && /[\u4e00-\u9fa5]/.test(s) && s.length <= 24) return true;
+        // 注意不要把表头词「客户」本身当成公司名，否则「使用客户」这类列名会被误判
+        if (s.replace(/客户/g, '').length < 2) return false;
+        return /(公司|集团|工厂|厂|有限|股份|实业|科技|电子|电器|电气|精密|制造|供应商|商行|中心|研究所|株式会社|\(株\))/.test(s);
+    }
+
+    /** 像纯编码：只有字母数字 + 常见分隔符 */
+    function looksLikeCodeChars(v) {
+        var s = cellToString(v);
+        if (!s) return false;
+        return /^[A-Za-z0-9][A-Za-z0-9\-_.\/# ]*$/.test(s);
+    }
+
+    /** 像图号：纯编码字符且比较长（图号一般比物料编码长） */
+    function looksLikeDrawingNumber(v) {
+        var s = cellToString(v);
+        return looksLikeCodeChars(s) && s.replace(/[^A-Za-z0-9]/g, '').length >= 12;
+    }
+
+    /** 像物料编码：纯编码字符但不长，且含数字 */
+    function looksLikeMaterialCode(v) {
+        var s = cellToString(v);
+        if (!looksLikeCodeChars(s)) return false;
+        var compact = s.replace(/[^A-Za-z0-9]/g, '');
+        if (!/[0-9]/.test(compact)) return false;
+        return compact.length >= 3 && compact.length <= 16;
+    }
+
+    /** 数据行里的一格是「说明文字」？ */
+    function looksLikeCommentCell(v) {
+        var s = cellToString(v);
+        if (!s) return false;
+        if (MATERIAL_IMPORT_BAD_WORDS.indexOf(s) !== -1) return true;
+        return /^[\u4e00-\u9fa5]{1,6}$/.test(s);
+    }
+
+    /** 内容特征识别列序 */
+    function detectMaterialMappingByContent(dataRows) {
+        var sample = dataRows.slice(0, 60);
+        var colCount = 0;
+        sample.forEach(function (r) { colCount = Math.max(colCount, Array.isArray(r) ? r.length : 0); });
+
+        // 说明/汇总行（整格中文字）样本太少时先不排除，避免只有一两行数据时把内容判断直接放弃
+        if (dataRows.length > 2) {
+            for (var c0 = 0; c0 < colCount; c0++) {
+                if (dataRows.some(function (r) { return looksLikeCommentCell((r || [])[c0]); })) {
+                    return null; // 有说明文字行，不敢猜，交给用户
+                }
+            }
+        }
+        var commentRows = [];
+        dataRows.forEach(function (r) {
+            if (String(cellToString((r || [])[colCount - 1])).length === 1) commentRows.push(r);
+        });
+
+        var hasCodeLike = false;
+        sample.forEach(function (r) {
+            if (commentRows.indexOf(r) !== -1) return; // 说明/汇总行不参与打分
+            for (var i = 0; i < colCount; i++) {
+                if (looksLikeCodeChars((r || [])[i])) hasCodeLike = true;
+            }
+        });
+        if (!hasCodeLike) return null;
+
+        var scores = [];
+        for (var i = 0; i < colCount; i++) {
+            var cust = 0, code = 0, draw = 0, nonEmpty = 0;
+            sample.forEach(function (r) {
+                if (commentRows.indexOf(r) !== -1) return; // 说明/汇总行不参与打分
+                var v = (r || [])[i];
+                if (cellToString(v) === '') return;
+                nonEmpty++;
+                if (looksLikeCompanyName(v)) cust++;
+                else if (looksLikeDrawingNumber(v)) draw++;
+                else if (looksLikeMaterialCode(v)) code++;
+            });
+            // 每格都像公司名 → 这列基本确定是客户
+            var custScore = cust + (nonEmpty > 0 && cust === nonEmpty ? 10 : 0);
+            scores.push({ col: i, cust: custScore, code: code, draw: draw, nonEmpty: nonEmpty });
+        }
+
+        function best(key, used) {
+            var top = null;
+            scores.forEach(function (s) {
+                if (used.indexOf(s.col) !== -1 || s[key] <= 0) return;
+                if (!top || s[key] > top[key] || (s[key] === top[key] && s.nonEmpty > top.nonEmpty)) top = s;
+            });
+            return top;
+        }
+
+        var used = [];
+        var map = { code: -1, drawing: -1, customer: -1 };
+
+        var pickCustomer = best('cust', used);
+        if (pickCustomer) { map.customer = pickCustomer.col; used.push(pickCustomer.col); }
+
+        var pickCode = best('code', used);
+        if (pickCode) { map.code = pickCode.col; used.push(pickCode.col); }
+
+        var pickDrawing = best('draw', used);
+        if (pickDrawing) { map.drawing = pickDrawing.col; used.push(pickDrawing.col); }
+
+        // 图号不够长没被认出来时，剩下的列里挑最像编码的那列当图号
+        if (map.drawing < 0) {
+            var rest = scores.filter(function (s) { return used.indexOf(s.col) === -1 && s.nonEmpty > 0; })
+                .sort(function (a, b) { return (b.draw + b.code + b.cust) - (a.draw + a.code + a.cust); });
+            if (rest.length > 0) { map.drawing = rest[0].col; used.push(rest[0].col); }
+        }
+
+        return (map.customer >= 0 || map.code >= 0 || map.drawing >= 0) ? map : null;
+    }
+
+    /** 兜底猜测：按常见顺序套用 */
+    function guessMaterialMappingByPosition() {
+        return { code: 0, drawing: 1, customer: 2 };
+    }
+
+    /** 取某列的非空值 */
+    function materialColumnValues(dataRows, col) {
+        var out = [];
+        dataRows.forEach(function (r) {
+            var v = cellToString((r || [])[col]);
+            if (v !== '') out.push(v);
+        });
+        return out;
+    }
+
+    /** 这列是不是整列都是公司名 */
+    function materialColumnAllCompany(dataRows, col) {
+        var vals = materialColumnValues(dataRows, col);
+        return vals.length > 0 && vals.every(function (v) { return looksLikeCompanyName(v); });
+    }
+
+    /** 这列是不是整列都是图号 */
+    function materialColumnAllDrawing(dataRows, col) {
+        var vals = materialColumnValues(dataRows, col);
+        return vals.length > 0 && vals.every(function (v) { return looksLikeDrawingNumber(v); });
+    }
+
+    /** 这列是不是整列都是物料编码 */
+    function materialColumnAllCode(dataRows, col) {
+        var vals = materialColumnValues(dataRows, col);
+        return vals.length > 0 && vals.every(function (v) { return looksLikeMaterialCode(v); });
+    }
+
+    /**
+     * 校验一个列映射和真实数据合不合
+     * 有些表格「表头写的顺序」和「数据实际顺序」是错开的
+     * （例如表头写「物料编码,图号,客户」，但数据其实是「客户,物料编码,图号」），
+     * 这种情况照表头导入会整体错位，必须靠数据内容纠正
+     */
+    function validateMaterialMapping(dataRows, map) {
+        var score = 0;
+
+        if (map.code >= 0 && materialColumnAllCode(dataRows, map.code)) score++;
+        else if (map.code >= 0 && materialColumnAllCompany(dataRows, map.code)) score--;
+
+        if (map.drawing >= 0 && materialColumnAllDrawing(dataRows, map.drawing)) score++;
+        else if (map.drawing >= 0 && materialColumnAllCode(dataRows, map.drawing)) score--;
+        else if (map.drawing >= 0 && materialColumnAllCompany(dataRows, map.drawing)) score--;
+
+        if (map.customer >= 0 && materialColumnAllCompany(dataRows, map.customer)) score++;
+        else if (map.customer >= 0) score--;
+
+        return score;
+    }
+
+    /**
+     * 按内容判断出来的映射有多可信（0~3）
+     * 只有 3 列都被整列数据验证过才让内容判断覆盖表头，
+     * 否则像「只有 1 行数据」的文件会误伤正确的表头
+     */
+    function materialMappingConfidence(dataRows, map) {
+        if (!map) return 0;
+        var conf = 0;
+        if (map.code >= 0 && materialColumnAllCode(dataRows, map.code)) conf++;
+        if (map.drawing >= 0 && materialColumnAllDrawing(dataRows, map.drawing)) conf++;
+        if (map.customer >= 0 && materialColumnAllCompany(dataRows, map.customer)) conf++;
+        return conf;
+    }
+
+    /** 表头单元格文字，用于下拉里显示 */
+    function headerLabelAt(headerRow, col) {
+        var text = cellToString((headerRow || [])[col]);
+        if (!text) return '';
+        return text.length > 10 ? text.slice(0, 10) + '…' : text;
+    }
+
+    /** 生成列下拉的选项 HTML */
+    function buildMaterialColumnOptions(headerRow, colCount, selected) {
+        var html = '<option value="-1"' + (selected === -1 ? ' selected' : '') + '>— 不使用 —</option>';
+        for (var i = 0; i < colCount; i++) {
+            var label = '第 ' + (i + 1) + ' 列';
+            var head = headerLabelAt(headerRow, i);
+            if (head) label += '：' + head;
+            html += '<option value="' + i + '"' + (selected === i ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+        }
+        return html;
+    }
+
+    /** 预览表格 */
+    function buildMaterialImportPreview(rows, headerRow, hasHeader, map) {
+        var start = hasHeader ? 1 : 0;
+        var body = '';
+        var shown = 0;
+
+        for (var i = start; i < rows.length && shown < 5; i++) {
+            var r = rows[i] || [];
+            if (!cellToString(r[map.code]) && !cellToString(r[map.drawing]) && !cellToString(r[map.customer])) continue;            body += '<tr><td>' + escapeHtml(cellToString(r[map.code])) + '</td><td>' +
+                escapeHtml(cellToString(r[map.drawing])) + '</td><td>' +
+                escapeHtml(cellToString(r[map.customer])) + '</td></tr>';
+            shown++;
+        }
+
+        return '<div style="font-size:13px;color:#666;margin:4px 0 6px;">导入后的样子（前 ' + shown + ' 行预览）</div>' +
+            '<table class="modal-table"><thead><tr><th>物料编码</th><th>图号</th><th>客户</th></tr></thead>' +
+            '<tbody>' + (body || '<tr><td colspan="3">（没有可导入的数据行）</td></tr>') + '</tbody></table>';
+    }
+
+    /** 读取弹窗里三个列下拉的当前值（-1 = 不使用） */
+    function readMaterialImportMapping() {        function pick(id) {
+            var v = parseInt(document.getElementById(id).value, 10);
+            return isNaN(v) ? -1 : v;
+        }
+        return {
+            code: pick('materialImportColCode'),
+            drawing: pick('materialImportColDrawing'),
+            customer: pick('materialImportColCustomer')
+        };
+    }
+
+    /** 把当前三条列选择渲染进弹窗 */
+    function renderMaterialImportModal() {
+        var rows = pendingMaterialRows;
+        var headerInfo = findMaterialHeaderRow(rows);
+        var headerRow = headerInfo.row;
+        var hasHeader = isMaterialHeaderRow(headerRow);
+        var dataRows = hasHeader ? rows.slice(headerInfo.rowIndex + 1) : rows;
+        var colCount = 0;
+        rows.forEach(function (r) { colCount = Math.max(colCount, Array.isArray(r) ? r.length : 0); });
+
+        var map = readMaterialImportMapping();
+
+        var realRows = dataRows.filter(function (r) {
+            return cellToString((r || [])[map.code]) || cellToString((r || [])[map.drawing]) || cellToString((r || [])[map.customer]);
+        });
+
+        var headerText = headerRow.map(function (c) { return cellToString(c); }).filter(Boolean).join(' | ');
+
+        var explain;
+        if (!pendingMaterialHasHeader) {
+            explain = '📋 没找到可用的表头行，已按数据内容判断列序';
+        } else if (pendingMaterialMappingSource === 'content') {
+            explain = '⚠️ 注意：表头写的是「' + escapeHtml(headerText) +
+                '」，但数据实际列序跟表头不一致，已按<strong>数据内容</strong>判断列序。请重点核对下面的预览，不对就在上面手动改列';
+        } else {
+            explain = '✅ 已读取表头行（' + escapeHtml(headerText) + '），与数据内容一致，按列名自动对应';
+        }
+
+        document.getElementById('materialImportHeaderNote').innerHTML =
+            '<strong>' + escapeHtml(pendingMaterialFileName || 'Excel 文件') + '</strong><br>' +
+            explain +
+            '<br>将导入 <strong>' + realRows.length + '</strong> 行数据 —— 请核对下面的预览，不对就在上面改列' +
+            buildMaterialLibraryWarning();
+
+        document.getElementById('materialImportPreview').innerHTML =
+            buildMaterialImportPreview(dataRows, headerRow, false, map);
+    }
+
+    /**
+     * 检测「现有物料库」是否残留了历史导入错位的数据
+     * 旧版本的导入逻辑会把整行错位成「物料编码=公司名、图号=物料编码、客户=图号」，
+     * 如果发现这种痕迹，明确提示用户去物料库里清掉重导
+     */
+    function buildMaterialLibraryWarning() {
+        var bad = materials.filter(function (m) {
+            if (!m) return false;
+            var code = String(m.materialCode || '');
+            var cust = String(m.customer || '');
+            if (code.indexOf('\u516c\u53f8') === -1) return false;
+            return !cust || looksLikeCodeChars(cust);
+        });
+        if (bad.length === 0) return '';
+
+        return '<div class="import-warn">⚠️ 另外：现有物料库里已有 <strong>' + bad.length +
+            '</strong> 条看起来是「旧导入错位」的数据（物料编码里存着公司名）。' +
+            '这些条目不会因为本次导入自动修正，建议在「已存物料」里用批量删除清掉后再重新导入。</div>';
+    }
+
+    /** 打开「确认列对应」弹窗 */
+    function openMaterialImportConfirm(rows, fileName) {
+        pendingMaterialRows = rows;
+        pendingMaterialFileName = fileName || '';
+
+        var headerInfo = findMaterialHeaderRow(rows);
+        var headerRow = headerInfo.row;
+        var hasHeader = isMaterialHeaderRow(headerRow);
+        var dataRows = hasHeader ? rows.slice(headerInfo.rowIndex + 1) : rows;
+
+        var headerMap = hasHeader ? detectMaterialMappingByHeader(headerRow) : null;
+        var contentMap = detectMaterialMappingByContent(dataRows);
+        var mapping;
+        var source;
+
+        if (headerMap) {
+            // 表头认出来了，但要跟数据对一下：有些表格表头顺序和数据顺序是错开的
+            var contentConf = contentMap ? materialMappingConfidence(dataRows, contentMap) : 0;
+            var contentScore = contentMap ? validateMaterialMapping(dataRows, contentMap) : -99;
+            var headerScore = validateMaterialMapping(dataRows, headerMap);
+            // 内容判断至少两列被整列数据验证过、且比表头明显更贴合数据 → 判定表头与数据错开
+            // （要求 contentScore 高出 2 分，避免「只有 1 行数据」时误伤正确表头）
+            if (contentMap && contentConf >= 2 && contentScore >= headerScore + 2) {
+                mapping = contentMap;
+                source = 'content';
+            } else {
+                mapping = headerMap;
+                source = 'header';
+            }
+        } else if (contentMap) {
+            mapping = contentMap;
+            source = 'content';
+        } else {
+            mapping = guessMaterialMappingByPosition();
+            source = 'guess';
+        }
+
+        pendingMaterialMappingSource = source;
+        pendingMaterialHasHeader = hasHeader;
+
+        var colCount = 0;
+        rows.forEach(function (r) { colCount = Math.max(colCount, Array.isArray(r) ? r.length : 0); });
+
+        document.getElementById('materialImportColCode').innerHTML =
+            buildMaterialColumnOptions(headerRow, colCount, mapping.code);
+        document.getElementById('materialImportColDrawing').innerHTML =
+            buildMaterialColumnOptions(headerRow, colCount, mapping.drawing);
+        document.getElementById('materialImportColCustomer').innerHTML =
+            buildMaterialColumnOptions(headerRow, colCount, mapping.customer);
+
+        renderMaterialImportModal();
+        document.getElementById('materialImportModal').classList.add('modal--open');
+    }
+
+    window.closeMaterialImportModal = function () {
+        document.getElementById('materialImportModal').classList.remove('modal--open');
+        pendingMaterialRows = null;
+        pendingMaterialFileName = '';
+    };
+
+    // 改了列选择就重新预览
+    MATERIAL_IMPORT_FIELDS.forEach(function (f) {
+        document.getElementById('materialImportCol' + f.key.charAt(0).toUpperCase() + f.key.slice(1))
+            .addEventListener('change', renderMaterialImportModal);
+    });
+
+    /** 真正执行导入 */
+    window.applyMaterialImport = function () {
+        var rows = pendingMaterialRows;
+        if (!rows) { window.closeMaterialImportModal(); return; }
+
+        var map = readMaterialImportMapping();
+        if (map.drawing < 0) { showToast('请先指定「图号」对应哪一列'); return; }
+
+        var headerInfo = findMaterialHeaderRow(rows);
+        var headerRow = headerInfo.row;
+        var hasHeader = isMaterialHeaderRow(headerRow);
+        var start = hasHeader ? headerInfo.rowIndex + 1 : 0;
+        var result = { imported: 0, merged: 0, skipped: 0 };
+
+        for (var i = start; i < rows.length; i++) {
+            var row = rows[i] || [];
+            var code = cellToString(row[map.code]);
+            var drawing = cellToString(row[map.drawing]);
+            var customer = cellToString(row[map.customer]);
+
+            // 图号是唯一必需的字段（物料编码允许为空，发货前检查自动建档的条目就没有编码）
+            if (!drawing) { result.skipped++; continue; }
+            if (MATERIAL_IMPORT_BAD_WORDS.indexOf(drawing) !== -1) { result.skipped++; continue; }
+
+            var key = materialKey(code, drawing);
+            var existingIndex = materials.findIndex(function (m) {
+                return materialKey(m.materialCode, m.drawingNo) === key;
+            });
+
+            if (existingIndex >= 0) {
+                // 导入的客户为空时保留原客户，避免把已有客户清空
+                if (customer) materials[existingIndex].customer = customer;
+                result.merged++;
+            } else {
+                materials.push({ materialCode: code, drawingNo: drawing, customer: customer });
+                result.imported++;
+            }
+        }
+
+        saveMaterials();
+        renderMaterials();
+        updateFilterCustomers();
+        renderCustomerList();
+        renderShipRecords();
+        refreshShipDrawingList();
+        window.closeMaterialImportModal();
+        showToast('✅ 新增 ' + result.imported + ' 条，合并 ' + result.merged +
+            ' 条，跳过 ' + result.skipped + ' 条');
+    };
+
+    /** 导入物料库 Excel：先解析，再弹窗确认列对应 */
     window.importMaterials = function (input) {
         var file = input.files[0];
         if (!file) return;
@@ -2187,52 +2839,8 @@
                 var workbook = XLSX.read(data, { type: 'array' });
                 var sheet = workbook.Sheets[workbook.SheetNames[0]];
                 var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                if (rows.length < 2) { showToast('文件内容为空'); return; }
-
-                var result = { imported: 0, merged: 0, skipped: 0 };
-                for (var i = 1; i < rows.length; i++) {
-                    var row = rows[i];
-                    var code = '', drawing = '', customer = '';
-
-                    if (row.length >= 3) {
-                        var first = (row[0] || '').toString().trim();
-                        var second = (row[1] || '').toString().trim();
-                        // 智能识别第一列是客户还是物料编码
-                        if (/[a-zA-Z0-9]/.test(second) && second.length > 2) {
-                            customer = first;
-                            code = second;
-                            drawing = (row[2] || '').toString().trim();
-                        } else {
-                            code = first;
-                            drawing = second;
-                            customer = (row[2] || '').toString().trim();
-                        }
-                    } else {
-                        code = (row[0] || '').toString().trim();
-                        drawing = (row[1] || '').toString().trim();
-                        customer = (row[2] || '').toString().trim();
-                    }
-
-                    if (!code || !drawing) { result.skipped++; continue; }
-
-                    var existingIndex = materials.findIndex(function (m) {
-                        return m.materialCode === code && m.drawingNo === drawing;
-                    });
-                    if (existingIndex >= 0) {
-                        materials[existingIndex].customer = customer;
-                        result.merged++;
-                    } else {
-                        materials.push({ materialCode: code, drawingNo: drawing, customer: customer });
-                        result.imported++;
-                    }
-                }
-
-                saveMaterials();
-                renderMaterials();
-                updateFilterCustomers();
-                renderCustomerList();
-                showToast('✅ 新增 ' + result.imported + ' 条，合并 ' + result.merged +
-                    ' 条，跳过 ' + result.skipped + ' 条');
+                if (rows.length === 0) { showToast('文件内容为空'); input.value = ''; return; }
+                openMaterialImportConfirm(rows, file.name);
             } catch (err) {
                 showToast('❌ 导入失败：文件格式不对');
             }
@@ -2262,6 +2870,7 @@
             series: currentSeries,
             recordsByDate: recordsByDate,
             materialDB: materials,
+            shipRecordsByDate: shipRecordsByDate,
             exportDate: SELECTED_DATE,
             version: CONFIG.EXPORT_VERSION
         };
@@ -2297,8 +2906,11 @@
                 currentSeries = targetSeries;
                 recordsByDate = data.recordsByDate;
                 materials = data.materialDB;
+                // 旧版单系列备份可能没有发货前检查数据
+                shipRecordsByDate = data.shipRecordsByDate || {};
                 saveRecords();
                 saveMaterials();
+                saveShipRecords();
                 migrateMalformedDateKeys(); // 修复导入文件中的旧格式日期 key
                 recordsByDate = safeLoadJSON(seriesRecordsKey(currentSeries), {}); // 重新载入修复后的数据
                 refreshAllViews();
@@ -2327,6 +2939,21 @@
     /** 物料唯一键：物料编码 + 图号（忽略大小写与首尾空格，避免重复入库） */
     function materialKey(code, drawing) {
         return String(code || '').trim().toLowerCase() + '\u0000' + String(drawing || '').trim().toLowerCase();
+    }
+
+    /**
+     * 物料编码显示文本：物料库允许「只有图号、没有物料编码」的条目
+     * （发货前检查遇到物料库里没有的图号时会自动这样建档）
+     */
+    function materialCodeText(m) {
+        var code = String((m && m.materialCode) || '').trim();
+        return code || '（未填编码）';
+    }
+
+    /** 物料库物料列表的一行文本 */
+    function materialLine(m) {
+        return escapeHtml(materialCodeText(m)) + ' | 图号：' + escapeHtml(m.drawingNo || '-') +
+            ' | 客户：' + escapeHtml((m && m.customer) || '-');
     }
 
     /**
@@ -2382,7 +3009,8 @@
         }
         var query = document.getElementById(sourceInputId).value;
         dropdown.innerHTML = items.map(function (m) {
-            var val = m[displayField];
+            // 物料编码可能为空（发货前检查自动建档的条目），此时退回用图号显示，避免 null 报错
+            var val = String(m[displayField] || m.drawingNo || m.materialCode || '');
             var idx = val.toLowerCase().indexOf(query.toLowerCase());
             var display;
             if (idx >= 0) {
@@ -2394,11 +3022,11 @@
             }
             return (
                 '<div class="dropdown-item" data-customer="' + escapeHtml(m.customer || '') +
-                '" data-code="' + escapeHtml(m.materialCode) +
-                '" data-drawing="' + escapeHtml(m.drawingNo) + '">' +
+                '" data-code="' + escapeHtml(m.materialCode || '') +
+                '" data-drawing="' + escapeHtml(m.drawingNo || '') + '">' +
                 display + ' <span style="color:#999;font-size:12px;">→ ' +
-                escapeHtml(m.customer || '') + ' | ' + escapeHtml(m.materialCode) +
-                ' | ' + escapeHtml(m.drawingNo) + '</span></div>'
+                escapeHtml(m.customer || '') + ' | ' + escapeHtml(materialCodeText(m)) +
+                ' | ' + escapeHtml(m.drawingNo || '') + '</span></div>'
             );
         }).join('');
         dropdown.classList.add('dropdown--open');
@@ -2797,6 +3425,302 @@
         saveRecords();
         updateFilterCustomers();
         renderTodayRecords();
+        showToast('🗑️ 已删除');
+    };
+
+    /* =============================================================================
+     * 发货前检查（另一项目：只录图号 + 数量）
+     * ============================================================================= */
+
+    var shipPage = 1;
+    var shipEditingIndex = -1;
+    var entryTab = 'inspect';
+
+    /** 切换录入页签：检验数据 / 发货前检查 */
+    window.switchEntryTab = function (tab) {
+        entryTab = (tab === 'ship') ? 'ship' : 'inspect';
+        document.getElementById('inspectPane').style.display = (entryTab === 'inspect') ? '' : 'none';
+        document.getElementById('shipPane').style.display = (entryTab === 'ship') ? '' : 'none';
+        document.querySelectorAll('.entry-tab').forEach(function (btn) {
+            btn.classList.toggle('entry-tab--active', btn.dataset.tab === entryTab);
+        });
+        if (entryTab === 'ship') {
+            renderShipRecords();
+            refreshShipDrawingList();
+        }
+    };
+
+    /** 获取今日发货前检查记录 */
+    function getTodayShipRecords() {
+        return shipRecordsByDate[SELECTED_DATE] || [];
+    }
+
+    /** 图号候选：物料库全部去重图号 + 已有发货前检查里用过的图号 */
+    function refreshShipDrawingList() {
+        var list = document.getElementById('shipDrawingList');
+        var seen = {};
+        materials.forEach(function (m) {
+            var d = (m && m.drawingNo ? String(m.drawingNo) : '').trim();
+            if (d) seen[d] = true;
+        });
+        Object.keys(shipRecordsByDate).forEach(function (date) {
+            var arr = shipRecordsByDate[date];
+            if (!Array.isArray(arr)) return;
+            arr.forEach(function (r) {
+                var d = (r && r.drawingNo ? String(r.drawingNo) : '').trim();
+                if (d) seen[d] = true;
+            });
+        });
+        list.innerHTML = Object.keys(seen).sort(function (a, b) {
+            return a.localeCompare(b, 'zh-CN');
+        }).map(function (d) {
+            return '<option value="' + escapeHtml(d) + '"></option>';
+        }).join('');
+    }
+
+    /**
+     * 按图号去物料库匹配（只读取，不写入物料库）
+     * 返回 { found, customers: [], materialCodes: [] }
+     */
+    function lookupDrawingInMaterials(drawingNo) {
+        var target = String(drawingNo || '').trim().toLowerCase();
+        if (!target) return { found: false, exists: false, customers: [], materialCodes: [] };
+
+        var exists = false;
+        var customers = [];
+        var codes = [];
+        materials.forEach(function (m) {
+            if (!m) return;
+            if (String(m.drawingNo || '').trim().toLowerCase() !== target) return;
+            exists = true;
+            var c = String(m.customer || '').trim();
+            if (c && customers.indexOf(c) === -1) customers.push(c);
+            var code = String(m.materialCode || '').trim();
+            if (code && codes.indexOf(code) === -1) codes.push(code);
+        });
+
+        return {
+            // found = 有客户或物料编码，值得显示；exists = 物料库里有这张图号（可能只是自动建档的空条目）
+            found: (customers.length > 0 || codes.length > 0),
+            exists: exists,
+            customers: customers,
+            materialCodes: codes
+        };
+    }
+
+    /** 把匹配结果拼成一行提示文本 */
+    function describeDrawingMatch(info) {
+        if (!info.found) return '';
+        var parts = [];
+        if (info.customers.length > 0) parts.push('客户：' + info.customers.join('、'));
+        if (info.materialCodes.length > 0) parts.push('物料编码：' + info.materialCodes.join('、'));
+        return parts.join(' | ');
+    }
+
+    /**
+     * 发货前检查专用：保证图号在物料库里有档案
+     * - 物料库里已有该图号（不管有没有物料编码）→ 什么都不做，直接返回
+     * - 没有 → 新增一条「只有图号、没有物料编码」的物料，省得下次再手输
+     * 只在图号完全不存在时新增，所以不会把已有物料的多个条目搞乱
+     * 返回 { added, existing }
+     */
+    function ensureDrawingInMaterials(drawingNo) {
+        var drawing = String(drawingNo || '').trim();
+        if (!drawing) return { added: false, existing: false };
+
+        var target = drawing.toLowerCase();
+        var exists = materials.some(function (m) {
+            return m && String(m.drawingNo || '').trim().toLowerCase() === target;
+        });
+        if (exists) return { added: false, existing: true };
+
+        // 物料编码留空：系统里不用编码也能建档，之后可在物料库补填
+        materials.push({ materialCode: '', drawingNo: drawing, customer: '' });
+        saveMaterials();
+        renderMaterials();
+        updateFilterCustomers();
+        renderCustomerList();
+        return { added: true, existing: false };
+    }
+
+    /** 图号输入联动：显示物料库匹配到的客户/物料编码 */
+    function updateShipMatchHint() {
+        var hint = document.getElementById('shipMatchHint');
+        var drawingNo = document.getElementById('shipDrawingNo').value.trim();
+
+        if (!drawingNo) {
+            hint.innerHTML = '💡 输入图号后会自动到物料库匹配客户';
+            hint.className = 'ship-match-hint';
+            return;
+        }
+
+        var info = lookupDrawingInMaterials(drawingNo);
+        if (!info.found) {
+            hint.innerHTML = info.exists
+                ? '📁 物料库里已有这个图号：' + escapeHtml(drawingNo) + '（还没填客户/物料编码，可在物料库补填）'
+                : '⚠️ 物料库里没有这个图号：' + escapeHtml(drawingNo) +
+                  '（保存后会自动建档入库，只有图号、没有物料编码）';
+            hint.className = 'ship-match-hint ship-match-hint--missing';
+            return;
+        }
+
+        var multi = info.customers.length > 1 ? '（该图号对应多个客户）' : '';
+        hint.innerHTML = '✅ 物料库匹配' + multi + '：' + escapeHtml(describeDrawingMatch(info));
+        hint.className = 'ship-match-hint ship-match-hint--ok';
+    }
+
+    /** 渲染今日发货前检查列表 */
+    function renderShipRecords() {
+        var records = getTodayShipRecords();
+        var list = document.getElementById('shipList');
+        document.getElementById('shipCount').textContent = records.length;
+
+        if (records.length === 0) {
+            list.innerHTML = '<div class="empty-state">暂无发货前检查记录</div>';
+            document.getElementById('shipSummaryRow').style.display = 'none';
+            document.getElementById('shipSumQty').textContent = 0;
+            renderShipPagination(0);
+            return;
+        }
+
+        var totalPages = Math.ceil(records.length / CONFIG.RECORD_PAGE_SIZE);
+        if (shipPage > totalPages) shipPage = totalPages;
+        if (shipPage < 1) shipPage = 1;
+
+        var start = (shipPage - 1) * CONFIG.RECORD_PAGE_SIZE;
+        var pageItems = records.slice(start, start + CONFIG.RECORD_PAGE_SIZE);
+
+        list.innerHTML = pageItems.map(function (r, i) {
+            var realIndex = start + i;
+            var info = lookupDrawingInMaterials(r.drawingNo);
+            var matchHtml = info.found
+                ? '<span class="ship-match">' + escapeHtml(describeDrawingMatch(info)) + '</span>'
+                : (info.exists
+                    ? '<span class="ship-no-match">物料库已有图号，未填客户</span>'
+                    : '<span class="ship-no-match">物料库无此图号</span>');
+            return (
+                '<div class="record-item">' +
+                '<div class="record-info">' +
+                '<strong>图号：' + escapeHtml(r.drawingNo || '-') + '</strong><br>' +
+                '数量：' + toNumber(r.quantity) + '<br>' +
+                matchHtml +
+                '</div>' +
+                '<div class="record-actions">' +
+                '<button class="btn-small btn-edit" onclick="editShipRecord(' + realIndex + ')">编辑</button>' +
+                '<button class="btn-small btn-delete" onclick="deleteShipRecord(' + realIndex + ')">删除</button>' +
+                '</div></div>'
+            );
+        }).join('');
+
+        var total = records.reduce(function (sum, r) { return sum + toNumber(r.quantity); }, 0);
+        document.getElementById('shipSummaryRow').style.display = 'flex';
+        document.getElementById('shipSumQty').textContent = total;
+        renderShipPagination(totalPages);
+    }
+
+    function renderShipPagination(totalPages) {
+        var div = document.getElementById('shipPagination');
+        if (totalPages <= 1) { div.innerHTML = ''; return; }
+        div.innerHTML =
+            '<button class="page-btn" onclick="changeShipPage(' + (shipPage - 1) + ')"' +
+            (shipPage <= 1 ? ' disabled' : '') + '>上一页</button>' +
+            '<span class="page-info">' + shipPage + ' / ' + totalPages + '</span>' +
+            '<button class="page-btn" onclick="changeShipPage(' + (shipPage + 1) + ')"' +
+            (shipPage >= totalPages ? ' disabled' : '') + '>下一页</button>';
+    }
+
+    window.changeShipPage = function (p) {
+        shipPage = p;
+        renderShipRecords();
+    };
+
+    /** 清空发货前检查表单 */
+    function clearShipForm() {
+        document.getElementById('shipDrawingNo').value = '';
+        document.getElementById('shipQuantity').value = '';
+        document.getElementById('shipAddBtn').style.display = 'block';
+        document.getElementById('shipUpdateBtn').style.display = 'none';
+        document.getElementById('shipCancelBtn').style.display = 'none';
+        shipEditingIndex = -1;
+        updateShipMatchHint();
+    }
+
+    /** 读取发货前检查表单 */
+    function getShipFormData() {
+        return {
+            drawingNo: document.getElementById('shipDrawingNo').value.trim(),
+            quantity: document.getElementById('shipQuantity').value
+        };
+    }
+
+    /** 发货前检查表单校验 */
+    function validateShipForm(data) {
+        if (!data.drawingNo) { showToast('请输入图号'); return false; }
+        if (data.quantity === '' || parseInt(data.quantity) < 0) { showToast('请输入正确的数量'); return false; }
+        return true;
+    }
+
+    // 图号输入框：实时显示物料库匹配到的客户/物料编码
+    document.getElementById('shipDrawingNo').addEventListener('input', function () {
+        updateShipMatchHint();
+    });
+
+    // 添加发货前检查记录
+    document.getElementById('shipAddBtn').addEventListener('click', function () {
+        var data = getShipFormData();
+        if (!validateShipForm(data)) return;
+        if (!shipRecordsByDate[SELECTED_DATE]) shipRecordsByDate[SELECTED_DATE] = [];
+        shipRecordsByDate[SELECTED_DATE].push(data);
+        saveShipRecords();
+
+        // 图号在物料库里没有 → 自动建档，下次直接能选（图号缺失时不建）
+        var auto = ensureDrawingInMaterials(data.drawingNo);
+
+        renderShipRecords();
+        refreshShipDrawingList();
+        clearShipForm();
+        showToast(auto.added ? '✅ 已录入，图号已自动建档进物料库' : '✅ 发货前检查已添加');
+    });
+
+    // 更新发货前检查记录
+    document.getElementById('shipUpdateBtn').addEventListener('click', function () {
+        var data = getShipFormData();
+        if (!validateShipForm(data)) return;
+        shipRecordsByDate[SELECTED_DATE][shipEditingIndex] = data;
+        saveShipRecords();
+
+        var auto = ensureDrawingInMaterials(data.drawingNo);
+
+        renderShipRecords();
+        refreshShipDrawingList();
+        clearShipForm();
+        showToast(auto.added ? '✅ 已更新，图号已自动建档进物料库' : '✅ 发货前检查已更新');
+    });
+
+    document.getElementById('shipCancelBtn').addEventListener('click', function () {
+        clearShipForm();
+        showToast('已取消');
+    });
+
+    /** 编辑发货前检查记录 */
+    window.editShipRecord = function (index) {
+        var r = shipRecordsByDate[SELECTED_DATE][index];
+        if (!r) return;
+        document.getElementById('shipDrawingNo').value = r.drawingNo || '';
+        document.getElementById('shipQuantity').value = r.quantity;
+        document.getElementById('shipAddBtn').style.display = 'none';
+        document.getElementById('shipUpdateBtn').style.display = 'block';
+        document.getElementById('shipCancelBtn').style.display = 'block';
+        shipEditingIndex = index;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteShipRecord = function (index) {
+        if (!confirm('确定删除这条发货前检查记录吗？')) return;
+        shipRecordsByDate[SELECTED_DATE].splice(index, 1);
+        if (shipRecordsByDate[SELECTED_DATE].length === 0) delete shipRecordsByDate[SELECTED_DATE];
+        saveShipRecords();
+        renderShipRecords();
         showToast('🗑️ 已删除');
     };
 
@@ -3214,7 +4138,8 @@
 
     document.getElementById('exportBtn').addEventListener('click', function () {
         var records = getTodayRecords();
-        if (records.length === 0) { showToast('没有可导出的记录'); return; }
+        var shipRecords = getTodayShipRecords();
+        if (records.length === 0 && shipRecords.length === 0) { showToast('没有可导出的记录'); return; }
 
         var data = [['客户', '生产订单', '图号', '物料编码', '数量', '不合格数量', '合格数量', '不合格原因']];
 
@@ -3242,8 +4167,25 @@
             { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 14 }
         ];
 
+        // 发货前检查单独一个工作表（只含图号 + 数量）
+        if (shipRecords.length > 0) {
+            var shipData = [['图号', '数量']];
+            shipRecords.forEach(function (r) {
+                shipData.push([r.drawingNo || '', toNumber(r.quantity)]);
+            });
+            var shipSum = shipRecords.reduce(function (sum, r) { return sum + toNumber(r.quantity); }, 0);
+            shipData.push(['合计', shipSum]);
+            shipData.push(['']);
+            shipData.push(['检查日期', SELECTED_DATE]);
+            shipData.push(['检验员', CONFIG.INSPECTOR_NAME]);
+
+            var wsShip = XLSX.utils.aoa_to_sheet(shipData);
+            wsShip['!cols'] = [{ wch: 24 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(wb, wsShip, '发货前检查');
+        }
+
         XLSX.writeFile(wb, '检验记录_' + SELECTED_DATE + '.xlsx');
-        showToast('📥 Excel已导出');
+        showToast(shipRecords.length > 0 ? '📥 Excel已导出（含发货前检查）' : '📥 Excel已导出');
 
         // 每月1日~3日自动附带全量JSON备份
         var dayOfMonth = new Date(SELECTED_DATE + 'T00:00:00').getDate();
@@ -3252,6 +4194,7 @@
                 series: currentSeries,
                 recordsByDate: recordsByDate,
                 materialDB: materials,
+                shipRecordsByDate: shipRecordsByDate,
                 exportDate: SELECTED_DATE,
                 version: CONFIG.EXPORT_VERSION
             };
@@ -3285,9 +4228,11 @@
 
     renderSeriesSelect();
     renderTodayRecords();
+    renderShipRecords();
     renderMaterials();
     updateFilterCustomers();
     renderCustomerList();
+    refreshShipDrawingList();
     setHistoryDatePreset('today');
     // 生成不良分类下拉选项
     document.getElementById('defectCategory').innerHTML = '<option value="">请选择不良分类</option>' +
