@@ -310,7 +310,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        .material-info { font-size: var(--font-size-lg); color: var(--color-gray-800); }
+        .material-info { font-size: var(--font-size-lg); color: var(--color-gray-800); display: flex; align-items: center; flex: 1; min-width: 0; }
         .material-info strong { color: var(--color-primary); }
 
         /* ---------- 折叠面板 ---------- */
@@ -399,6 +399,16 @@
         .search-result-item:last-child { border-bottom: none; }
         .search-result-item:active { background: #d2e3fc; }
         .search-result-item .info { flex: 1; }
+
+        /* ---------- 物料库批量操作 ---------- */
+        .material-bar { display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-md); }
+        .material-bar .btn-small { flex: 1; }
+        .material-bar--batch { display: none; align-items: center; background: #fff5f5; border: 1px solid #f3c9c9; border-radius: var(--radius-md); padding: var(--spacing-md) var(--spacing-lg); }
+        .material-bar--batch--visible { display: flex; }
+        .material-select-all { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-md); color: var(--color-gray-900); white-space: nowrap; cursor: pointer; }
+        .material-select-all input { width: 18px; height: 18px; margin: 0; }
+        .material-item--selected { background: var(--color-primary-light); border-radius: var(--radius-md); }
+        .material-checkbox { width: 20px; height: 20px; margin-right: var(--spacing-md); flex: none; }
 
         /* ---------- 分页 ---------- */
         .pagination {
@@ -566,6 +576,18 @@
 
             <div style="margin-top:12px;">
                 <div style="font-size:13px;color:#666;margin-bottom:8px;">已存物料（<span id="materialCount">0</span>条）</div>
+                <div class="material-bar" id="materialBar">
+                    <button class="btn-small" id="materialBatchBtn" onclick="toggleMaterialBatch()">☑️ 批量删除</button>
+                    <button class="btn-small btn-delete" id="materialClearAllBtn" style="display:none;" onclick="clearAllMaterials()">🗑️ 清空物料库</button>
+                </div>
+                <div class="material-bar material-bar--batch" id="materialBatchBar">
+                    <label class="material-select-all">
+                        <input type="checkbox" id="materialSelectAll" onchange="toggleSelectAllMaterials(this.checked)">
+                        全选本页
+                    </label>
+                    <button class="btn-small btn-delete" id="materialBatchDeleteBtn" onclick="deleteSelectedMaterials()">删除选中（0）</button>
+                    <button class="btn-small" onclick="toggleMaterialBatch()">取消</button>
+                </div>
                 <div id="materialList"><div class="empty-state" style="padding:16px;font-size:13px;">暂无物料，请添加</div></div>
                 <div class="pagination" id="materialPagination"></div>
             </div>
@@ -1474,28 +1496,101 @@
 
     var materialPage = 1;
     var editingMaterialIndex = -1;
+    // 批量删除：是否处于批量模式 + 已勾选的物料唯一键（物料编码+图号）
+    var materialBatchMode = false;
+    var batchSelected = new Set();
+
+    /** 当前页的物料列表（分页后） */
+    function getMaterialPageItems() {
+        var totalPages = Math.ceil(materials.length / CONFIG.MATERIAL_PAGE_SIZE) || 1;
+        if (materialPage > totalPages) materialPage = totalPages;
+        if (materialPage < 1) materialPage = 1;
+        var start = (materialPage - 1) * CONFIG.MATERIAL_PAGE_SIZE;
+        return { start: start, items: materials.slice(start, start + CONFIG.MATERIAL_PAGE_SIZE) };
+    }
+
+    /** 清理已不存在的选中项 */
+    function pruneBatchSelection() {
+        var keys = {};
+        materials.forEach(function (m) { keys[materialKey(m.materialCode, m.drawingNo)] = true; });
+        Array.from(batchSelected).forEach(function (k) {
+            if (!keys[k]) batchSelected.delete(k);
+        });
+    }
+
+    /** 更新批量操作栏（按钮文案、全选框状态） */
+    function updateMaterialBatchUI() {
+        var totalPages = Math.ceil(materials.length / CONFIG.MATERIAL_PAGE_SIZE) || 1;
+        if (materialPage > totalPages) materialPage = totalPages;
+        if (materialPage < 1) materialPage = 1;
+        var start = (materialPage - 1) * CONFIG.MATERIAL_PAGE_SIZE;
+        var pageItems = materials.slice(start, start + CONFIG.MATERIAL_PAGE_SIZE);
+
+        var bar = document.getElementById('materialBar');
+        var batchBar = document.getElementById('materialBatchBar');
+        if (batchBar) {
+            if (materialBatchMode && materials.length > 0) {
+                bar.style.display = 'none';
+                batchBar.classList.add('material-bar--batch--visible');
+            } else {
+                bar.style.display = '';
+                batchBar.classList.remove('material-bar--batch--visible');
+                if (!materialBatchMode) batchSelected.clear();
+            }
+        }
+
+        var clearAllBtn = document.getElementById('materialClearAllBtn');
+        if (clearAllBtn) clearAllBtn.style.display = materials.length > 0 ? '' : 'none';
+
+        var selCount = batchSelected.size;
+        var delBtn = document.getElementById('materialBatchDeleteBtn');
+        if (delBtn) delBtn.textContent = '删除选中（' + selCount + '）';
+
+        var selectAll = document.getElementById('materialSelectAll');
+        if (selectAll) {
+            var selectedOnPage = pageItems.filter(function (m) {
+                return batchSelected.has(materialKey(m.materialCode, m.drawingNo));
+            }).length;
+            selectAll.checked = pageItems.length > 0 && selectedOnPage === pageItems.length;
+            selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < pageItems.length;
+        }
+    }
 
     /** 渲染物料列表（分页） */
     function renderMaterials() {
         var list = document.getElementById('materialList');
         document.getElementById('materialCount').textContent = materials.length;
+        pruneBatchSelection();
 
         if (materials.length === 0) {
             list.innerHTML = '<div class="empty-state" style="padding:16px;font-size:13px;">暂无物料，请添加</div>';
+            updateMaterialBatchUI();
             renderMaterialPagination(0);
             return;
         }
 
-        var totalPages = Math.ceil(materials.length / CONFIG.MATERIAL_PAGE_SIZE);
-        if (materialPage > totalPages) materialPage = totalPages;
-        if (materialPage < 1) materialPage = 1;
-
-        var start = (materialPage - 1) * CONFIG.MATERIAL_PAGE_SIZE;
-        var end = start + CONFIG.MATERIAL_PAGE_SIZE;
-        var pageItems = materials.slice(start, end);
+        var page = getMaterialPageItems();
+        var start = page.start;
+        var pageItems = page.items;
 
         list.innerHTML = pageItems.map(function (m, i) {
             var realIndex = start + i;
+            var key = materialKey(m.materialCode, m.drawingNo);
+            var checked = batchSelected.has(key);
+
+            if (materialBatchMode) {
+                return (
+                    '<div class="material-item' + (checked ? ' material-item--selected' : '') +
+                    '" onclick="onMaterialRowClick(' + realIndex + ', event)">' +
+                    '<div class="material-info">' +
+                    '<input type="checkbox" class="material-checkbox"' + (checked ? ' checked' : '') +
+                    ' onclick="onMaterialCheckboxClick(' + realIndex + ', event)">' +
+                    '<span><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
+                    escapeHtml(m.drawingNo) + ' | 客户：' + escapeHtml(m.customer || '-') + '</span>' +
+                    '</div></div>'
+                );
+            }
+
             return (
                 '<div class="material-item">' +
                 '<div class="material-info"><strong>' + escapeHtml(m.materialCode) + '</strong> | 图号：' +
@@ -1507,8 +1602,100 @@
             );
         }).join('');
 
-        renderMaterialPagination(totalPages);
+        updateMaterialBatchUI();
+        renderMaterialPagination(Math.ceil(materials.length / CONFIG.MATERIAL_PAGE_SIZE));
     }
+
+    /** 勾选/取消勾选某条物料 */
+    function toggleBatchSelect(index, checked) {
+        var m = materials[index];
+        if (!m) return;
+        var key = materialKey(m.materialCode, m.drawingNo);
+        if (checked) batchSelected.add(key);
+        else batchSelected.delete(key);
+        renderMaterials();
+    }
+
+    /** 点击复选框（阻止冒泡，避免触发行点击重复切换） */
+    window.onMaterialCheckboxClick = function (index, event) {
+        if (event && event.stopPropagation) event.stopPropagation();
+        var checked = event && event.target ? !!event.target.checked : false;
+        toggleBatchSelect(index, checked);
+    };
+
+    /** 点击整行 → 切换勾选状态 */
+    window.onMaterialRowClick = function (index, event) {
+        if (event && event.preventDefault) event.preventDefault();
+        var m = materials[index];
+        if (!m) return;
+        var key = materialKey(m.materialCode, m.drawingNo);
+        toggleBatchSelect(index, !batchSelected.has(key));
+    };
+
+    /** 进入/退出批量删除模式 */
+    window.toggleMaterialBatch = function () {
+        if (!materialBatchMode && materials.length === 0) {
+            showToast('物料库为空，无需批量删除');
+            return;
+        }
+        materialBatchMode = !materialBatchMode;
+        batchSelected.clear();
+        renderMaterials();
+        showToast(materialBatchMode
+            ? '已进入批量删除：勾选要删除的物料（可翻页、可先用查找缩小范围）'
+            : '已退出批量删除');
+    };
+
+    /** 全选 / 取消全选当前页 */
+    window.toggleSelectAllMaterials = function (checked) {
+        getMaterialPageItems().items.forEach(function (m) {
+            var key = materialKey(m.materialCode, m.drawingNo);
+            if (checked) batchSelected.add(key);
+            else batchSelected.delete(key);
+        });
+        renderMaterials();
+    };
+
+    /** 批量删除选中物料 */
+    window.deleteSelectedMaterials = function () {
+        if (batchSelected.size === 0) {
+            showToast('请先勾选要删除的物料');
+            return;
+        }
+        if (!confirm('确定删除选中的 ' + batchSelected.size + ' 条物料吗？删除后无法撤销（可用备份恢复）。')) return;
+
+        var removed = 0;
+        materials = materials.filter(function (m) {
+            if (batchSelected.has(materialKey(m.materialCode, m.drawingNo))) {
+                removed++;
+                return false;
+            }
+            return true;
+        });
+        batchSelected.clear();
+        saveMaterials();
+
+        if (materials.length === 0) materialBatchMode = false;
+        renderMaterials();
+        updateFilterCustomers();
+        showToast('🗑️ 已批量删除 ' + removed + ' 条物料');
+    };
+
+    /** 清空当前系列的全部物料（二次确认） */
+    window.clearAllMaterials = function () {
+        if (materials.length === 0) { showToast('物料库为空'); return; }
+        if (!confirm('确定清空当前系列的全部 ' + materials.length + ' 条物料吗？')) return;
+        if (!confirm('再次确认：物料库将被清空，此操作无法撤销（可从备份恢复）。')) return;
+
+        var removed = materials.length;
+        materials = [];
+        batchSelected.clear();
+        materialBatchMode = false;
+        saveMaterials();
+        renderMaterials();
+        updateFilterCustomers();
+        showToast('🗑️ 已清空物料库，共删除 ' + removed + ' 条');
+    };
 
     function renderMaterialPagination(totalPages) {
         var div = document.getElementById('materialPagination');
@@ -1530,6 +1717,12 @@
     window.searchMaterial = function () {
         var code = document.getElementById('searchMaterialCode').value.trim();
         var resultDiv = document.getElementById('searchResult');
+        if (materialBatchMode) {
+            showToast('批量删除模式下不能点击查找，已自动退出批量模式');
+            materialBatchMode = false;
+            batchSelected.clear();
+            renderMaterials();
+        }
         if (!code) {
             resultDiv.innerHTML = '请输入物料编码或图号';
             resultDiv.classList.add('search-result--visible');
@@ -1705,7 +1898,10 @@
     };
 
     window.deleteMaterial = function (index) {
+        var m = materials[index];
+        if (!m) return;
         if (!confirm('确定删除这条物料吗？')) return;
+        batchSelected.delete(materialKey(m.materialCode, m.drawingNo));
         materials.splice(index, 1);
         saveMaterials();
         renderMaterials();
